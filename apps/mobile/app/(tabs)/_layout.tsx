@@ -18,7 +18,7 @@ function TabIcon({ name, focused, defaultColor }: {
   if (focused) {
     return (
       <View style={[styles.activeIconWrap, { backgroundColor: colors.tint }]}>
-        <IconSymbol size={18} name={name} color="#FFFFFF" />
+        <IconSymbol size={16} name={name} color="#FFFFFF" />
       </View>
     );
   }
@@ -79,6 +79,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="saved"
+        options={{
+          title: 'Saved',
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name="bookmark.fill" focused={focused} defaultColor={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
@@ -87,16 +96,15 @@ export default function TabLayout() {
           ),
         }}
       />
-      <Tabs.Screen name="saved" options={{ href: null }} />
     </Tabs>
   );
 }
 
 const styles = StyleSheet.create({
   activeIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
   },

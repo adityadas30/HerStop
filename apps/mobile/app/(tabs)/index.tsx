@@ -1,67 +1,24 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SymbolViewProps } from 'expo-symbols';
 
 import { FilterChip } from '@/components/ui/FilterChip';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { JourneyShield } from '@/components/ui/JourneyShield';
-import { StopCard, type StopData } from '@/components/ui/StopCard';
+import { StopCard } from '@/components/ui/StopCard';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
+import { FILTERS, MOCK_STOPS } from '@/data/mock-stops';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-
-// ---------- Mock data ----------
-
-const FILTERS: { label: string; icon: SymbolViewProps['name'] }[] = [
-  { label: 'Gas', icon: 'fuelpump.fill' },
-  { label: 'Restroom', icon: 'drop.fill' },
-  { label: 'Open Now', icon: 'clock.fill' },
-  { label: 'Well Lit', icon: 'lightbulb.fill' },
-];
-
-const MOCK_STOPS: StopData[] = [
-  {
-    id: '1',
-    name: 'Willow Creek Plaza',
-    distance: '2.5 miles away',
-    badge: 'recommended',
-    imageColor: '#C9B8A8',
-    tags: [
-      { label: 'Well Lit', icon: 'lightbulb.fill' },
-      { label: 'Clean Restroom', icon: 'sparkles' },
-    ],
-  },
-  {
-    id: '2',
-    name: 'The Atlas Point',
-    distance: '3.1 miles away',
-    badge: 'good',
-    imageColor: '#B8A898',
-    tags: [
-      { label: 'Staffed 24/7', icon: 'person.fill' },
-      { label: 'CCTV Monitored', icon: 'video.fill' },
-    ],
-  },
-  {
-    id: '3',
-    name: 'Meridian Transit Hub',
-    distance: '4.8 miles away',
-    badge: 'recommended',
-    imageColor: '#8B9DAF',
-    tags: [
-      { label: 'Safety Help Point', icon: 'shield.fill' },
-      { label: 'High Visibility', icon: 'lightbulb.fill' },
-    ],
-  },
-];
-
-// ---------- Component ----------
 
 export default function DiscoverScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const insets = useSafeAreaInsets();
-  const [selectedFilters, setSelectedFilters] = useState<Set<string>>(new Set(['Gas']));
+  const router = useRouter();
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedFilters, setSelectedFilters] = useState<Set<string>>(new Set());
 
   function toggleFilter(label: string) {
     setSelectedFilters((prev) => {
@@ -72,12 +29,32 @@ export default function DiscoverScreen() {
     });
   }
 
+  const filteredStops = useMemo(() => {
+    let result = MOCK_STOPS;
+
+    // Search by name or address
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      result = result.filter(
+        (s) => s.name.toLowerCase().includes(q) || s.address.toLowerCase().includes(q),
+      );
+    }
+
+    // Filter by selected categories (OR logic — match any)
+    if (selectedFilters.size > 0) {
+      result = result.filter((s) => s.categories.some((c) => selectedFilters.has(c)));
+    }
+
+    return result;
+  }, [searchQuery, selectedFilters]);
+
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + Spacing.sm }]}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled">
 
         {/* ── Header ── */}
         <View style={styles.header}>
@@ -102,7 +79,16 @@ export default function DiscoverScreen() {
             style={[styles.searchInput, { color: colors.text }]}
             placeholder="Where are you heading?"
             placeholderTextColor={colors.secondaryText}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            returnKeyType="search"
+            autoCorrect={false}
           />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8}>
+              <IconSymbol name="xmark" size={16} color={colors.secondaryText} />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* ── Filter chips ── */}
@@ -127,16 +113,32 @@ export default function DiscoverScreen() {
             Recommended near you
           </Text>
           <Text style={[styles.sectionSubtitle, { color: colors.secondaryText }]}>
-            Verified safe stops within 5 miles
+            {filteredStops.length === MOCK_STOPS.length
+              ? 'Verified safe stops within 5 miles'
+              : `${filteredStops.length} stop${filteredStops.length !== 1 ? 's' : ''} found`}
           </Text>
         </View>
 
         {/* ── Stop cards ── */}
-        <View style={styles.cardsList}>
-          {MOCK_STOPS.map((stop) => (
-            <StopCard key={stop.id} stop={stop} />
-          ))}
-        </View>
+        {filteredStops.length > 0 ? (
+          <View style={styles.cardsList}>
+            {filteredStops.map((stop) => (
+              <StopCard
+                key={stop.id}
+                stop={stop}
+                onPress={() => router.push(`/stop/${stop.id}`)}
+              />
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyIcon}>🔍</Text>
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>No stops found</Text>
+            <Text style={[styles.emptyBody, { color: colors.secondaryText }]}>
+              Try adjusting your search or filters to find stops nearby.
+            </Text>
+          </View>
+        )}
       </ScrollView>
 
       {/* ── Journey Shield (floating) ── */}
@@ -146,8 +148,6 @@ export default function DiscoverScreen() {
     </View>
   );
 }
-
-// ---------- Styles ----------
 
 const styles = StyleSheet.create({
   screen: {
@@ -218,6 +218,26 @@ const styles = StyleSheet.create({
   // Cards
   cardsList: {
     gap: Spacing.screen,
+  },
+
+  // Empty state
+  emptyState: {
+    alignItems: 'center',
+    paddingTop: Spacing.xxl,
+    paddingHorizontal: Spacing.md,
+    gap: Spacing.sm,
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: Spacing.sm,
+  },
+  emptyTitle: {
+    ...Typography.heading,
+    textAlign: 'center' as const,
+  },
+  emptyBody: {
+    ...Typography.body,
+    textAlign: 'center' as const,
   },
 
   // Shield

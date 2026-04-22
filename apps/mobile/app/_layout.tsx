@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
+import { SavedStopsProvider } from '@/contexts/saved-stops';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function RootLayout() {
@@ -10,16 +11,18 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="stop/[id]"
-          options={{ title: 'Stop Details', headerBackTitle: 'Back' }}
-        />
-      </Stack>
-      <StatusBar style="auto" />
+      <SavedStopsProvider>
+        <Stack>
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="stop/[id]"
+            options={{ title: 'Stop Details', headerBackTitle: 'Back' }}
+          />
+        </Stack>
+        <StatusBar style="auto" />
+      </SavedStopsProvider>
     </ThemeProvider>
   );
 }
