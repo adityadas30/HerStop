@@ -1,26 +1,12 @@
-import { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SymbolViewProps } from 'expo-symbols';
 
 import { IconSymbol } from './icon-symbol';
 import { Colors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { useSavedStops } from '@/contexts/saved-stops';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import type { StopData } from '@/data/mock-stops';
 
-export type BadgeType = 'recommended' | 'good';
-
-interface StopTag {
-  label: string;
-  icon: SymbolViewProps['name'];
-}
-
-export interface StopData {
-  id: string;
-  name: string;
-  distance: string;
-  badge: BadgeType;
-  tags: StopTag[];
-  imageColor: string;
-}
+export type { StopData };
 
 interface StopCardProps {
   stop: StopData;
@@ -30,7 +16,8 @@ interface StopCardProps {
 export function StopCard({ stop, onPress }: StopCardProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
-  const [bookmarked, setBookmarked] = useState(false);
+  const { isSaved, toggleSaved } = useSavedStops();
+  const bookmarked = isSaved(stop.id);
 
   const isRecommended = stop.badge === 'recommended';
 
@@ -44,7 +31,7 @@ export function StopCard({ stop, onPress }: StopCardProps) {
           {/* Bookmark */}
           <TouchableOpacity
             style={[styles.bookmarkBtn, { backgroundColor: colors.tint }]}
-            onPress={() => setBookmarked(!bookmarked)}
+            onPress={() => toggleSaved(stop.id)}
             activeOpacity={0.7}>
             <IconSymbol
               name={bookmarked ? 'bookmark.fill' : 'bookmark'}
