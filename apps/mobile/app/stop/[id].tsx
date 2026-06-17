@@ -1,10 +1,12 @@
+import { useEffect, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useSavedStops } from '@/contexts/saved-stops';
-import { getStopById } from '@/data/mock-stops';
+import type { StopData } from '@/data/mock-stops';
+import { getStopById } from '@/lib/api';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function StopDetailScreen() {
@@ -13,7 +15,23 @@ export default function StopDetailScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const { isSaved, toggleSaved } = useSavedStops();
 
-  const stop = getStopById(id ?? '');
+  const [stop, setStop] = useState<StopData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getStopById(id ?? '').then((s) => {
+      setStop(s);
+      setLoading(false);
+    });
+  }, [id]);
+
+  if (loading) {
+    return (
+      <View style={[styles.centered, { backgroundColor: colors.background }]}>
+        <ActivityIndicator color={colors.tint} />
+      </View>
+    );
+  }
 
   if (!stop) {
     return (

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,7 +8,8 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { JourneyShield } from '@/components/ui/JourneyShield';
 import { StopCard } from '@/components/ui/StopCard';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
-import { FILTERS, MOCK_STOPS } from '@/data/mock-stops';
+import { FILTERS, MOCK_STOPS, type StopData } from '@/data/mock-stops';
+import { getStops } from '@/lib/api';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function DiscoverScreen() {
@@ -17,8 +18,13 @@ export default function DiscoverScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
+  const [stops, setStops] = useState<StopData[]>(MOCK_STOPS);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilters, setSelectedFilters] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    getStops().then(setStops);
+  }, []);
 
   function toggleFilter(label: string) {
     setSelectedFilters((prev) => {
@@ -30,7 +36,7 @@ export default function DiscoverScreen() {
   }
 
   const filteredStops = useMemo(() => {
-    let result = MOCK_STOPS;
+    let result = stops;
 
     // Search by name or address
     const q = searchQuery.trim().toLowerCase();
@@ -46,7 +52,7 @@ export default function DiscoverScreen() {
     }
 
     return result;
-  }, [searchQuery, selectedFilters]);
+  }, [stops, searchQuery, selectedFilters]);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -113,7 +119,7 @@ export default function DiscoverScreen() {
             Recommended near you
           </Text>
           <Text style={[styles.sectionSubtitle, { color: colors.secondaryText }]}>
-            {filteredStops.length === MOCK_STOPS.length
+            {filteredStops.length === stops.length
               ? 'Verified safe stops within 5 miles'
               : `${filteredStops.length} stop${filteredStops.length !== 1 ? 's' : ''} found`}
           </Text>
