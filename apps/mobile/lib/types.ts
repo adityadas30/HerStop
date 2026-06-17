@@ -1,4 +1,4 @@
-/** Matches the future `stops` table in Supabase. */
+/** Row shape returned by Supabase `stops` table. */
 export interface Stop {
   id: string;
   name: string;
@@ -8,9 +8,10 @@ export interface Stop {
   badge: 'recommended' | 'good';
   categories: string[];
   tags: StopTag[];
-  image_url: string | null;
   rating: number;
   review_count: number;
+  image_url: string | null;
+  image_color: string;
   created_at: string;
 }
 
