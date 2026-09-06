@@ -14,8 +14,13 @@ export const supabaseConfigured =
 
 if (!supabaseConfigured) {
   console.warn(
-    '[supabase] Missing or placeholder credentials in apps/mobile/.env — using mock data.',
+    '[supabase] MOCK MODE — missing or placeholder credentials in apps/mobile/.env. ' +
+      'Run `npm run supabase:check` to diagnose.',
   );
+} else if (__DEV__) {
+  // Host only — never log the key.
+  const host = supabaseUrl.replace(/^https?:\/\//, '');
+  console.log(`[supabase] configured for host: ${host}`);
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
