@@ -120,7 +120,7 @@ export default function DiscoverScreen() {
           </Text>
           <Text style={[styles.sectionSubtitle, { color: colors.secondaryText }]}>
             {filteredStops.length === stops.length
-              ? 'Verified safe stops within 5 miles'
+              ? 'Better-reviewed stops within 5 miles'
               : `${filteredStops.length} stop${filteredStops.length !== 1 ? 's' : ''} found`}
           </Text>
         </View>
