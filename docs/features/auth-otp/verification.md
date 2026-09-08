@@ -111,8 +111,11 @@ decision.
       unrelated pre-existing warning).
 - [x] `npm run supabase:check` still returns LIVE with 6 rows — PASS (before and after code changes).
 - [x] Guest browsing unaffected — PASS (no code path in Explore/stop-detail touches auth).
-- [~] Profile screen's three states — PASS at the code level; **not** simulator-verified (no
-      Simulator in this environment).
+- [x] Profile screen's three states — PASS at the code level and via a real API-level OTP round
+      trip (see 2026-09-08 update above); **not** interactively tapped through in the Simulator
+      (session-type restriction, not an app issue) — recommended as a founder follow-up.
+- [x] Real OTP round-trip (send → deliver → enter → verify → session issued) — PASS, see
+      2026-09-08 update above. This was the item explicitly deferred before.
 - [x] No service-role key referenced; no Supabase Auth dashboard settings changed by the agent —
       PASS.
 - [x] `docs/features/auth-otp/` complete; `docs/schema.sql`, `STATUS.md`, `TASK_BOARD.md` updated —
@@ -129,6 +132,54 @@ No "safe"/"verified safe"/"guaranteed"/"crime-free" in any new copy
   not applied — unchanged by this task, tracked in `db-foundation`.
 - The remaining `JourneyShield.tsx` lint warning is pre-existing and out of scope here.
 - No `packages/*` work in this task (unrelated).
+
+## Update — 2026-09-08: real OTP round-trip verified
+
+This closes the "Known blocker" above. Verified via the live Supabase Auth REST API (the same
+endpoints `lib/auth.ts` calls through supabase-js) rather than tapping through the Simulator UI —
+see "Environment limitation" below for why.
+
+**Root cause found and fixed:** the Supabase project's email templates only contained
+`{{ .ConfirmationURL }}`, not `{{ .Token }}`. Worse, a first-time OTP request for a new email
+address uses the **"Confirm sign up"** template (mail type `signup`), not **"Magic link or OTP"**
+(mail type `magiclink`) — so fixing only the one named in the original blocker note wasn't enough.
+Founder approved editing both dashboard templates to add a `{{ .Token }}` block (kept the existing
+magic-link paragraph in each).
+
+**Round trip (real, not simulated):**
+1. `POST /auth/v1/otp` with the founder's real email, `create_user: true` → `200 {}`.
+2. Real email delivered to the founder's inbox containing a 6-digit code (confirmed by the founder
+   reading it back).
+3. `POST /auth/v1/verify` with that code, `type: "email"` → `200`, real `access_token` +
+   `refresh_token` + confirmed `user` object (`email_confirmed_at` set, `last_sign_in_at` set).
+4. Replaying the same code a second time failed (already consumed) — confirms single-use.
+5. Verifying a bogus code returned `403 {"error_code":"otp_expired","msg":"Token has expired or is
+   invalid"}` — a structured error, not a crash; matches how `lib/auth.ts` surfaces `error.message`
+   to the UI.
+6. A further live round trip (to test the refresh-token exchange and an authenticated sign-out
+   call) was blocked by Supabase's built-in mailer rate limit — **2 emails/hour** on this project
+   (confirmed in Authentication → Rate Limits). Not a code defect; the dashboard's own banner
+   already recommends custom SMTP for anything beyond light manual testing. Sign-out *was* confirmed
+   to correctly reject an unauthenticated call (`401 no_authorization`).
+
+**Bug found by independent review (qa-verifier) and fixed:** `profile.tsx`'s local `step`/`email`/
+`code` state wasn't reset on sign-out. Because `expo-router` keeps tab screens mounted, signing out
+without navigating away left the stale "enter the code" card showing instead of the guest form.
+Fixed in commit `31aee37` (`handleSignOut` now resets local state after `signOut()` resolves).
+`tsc`/`lint` re-confirmed clean after the fix.
+
+**Environment limitation — could not interactively tap through the Simulator UI:** the app itself
+was confirmed running correctly on a real booted iOS Simulator (iPhone 17 Pro, iOS 26.4) via
+`expo start --ios --offline` — screenshot showed the HerStop splash rendering, console logs showed
+`[supabase] configured for host: xnkjqcygzjlspeagcoal.supabase.co` and
+`[auth] state change: INITIAL_SESSION`. But three independent ways to *interact* with it (tap,
+type) were all blocked in this session: the dedicated iOS Simulator control tool ("Mobile
+simulator tools require an attended session"), generic desktop computer-control (same restriction
+on the approval dialog), and raw AppleScript/System Events (`osascript is not allowed assistive
+access`). This is a session-type restriction, not an app or implementation issue. **Still
+recommended:** a founder pass tapping through the actual on-screen flow at least once (Send code →
+enter code → Verify → Signed in → Sign out → confirm the guest form reappears correctly, thanks to
+the fix above) to close the loop on the visual/UX layer specifically.
 
 ## Reviewer notes
 - No service-role key used at any point; anon key only. `lib/auth.ts` logs only auth event names
