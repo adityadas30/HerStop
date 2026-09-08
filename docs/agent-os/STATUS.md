@@ -10,11 +10,19 @@
   is gitignored/per-machine, so a fresh clone/worktree needs its own copy. See
   `docs/features/db-live-reads/` for the original NXDOMAIN diagnosis (since fixed at the project
   level, no app code change needed).
-- **Auth:** email OTP sign-in implemented (`lib/auth.ts`, `contexts/auth.tsx`, wired into
-  `_layout.tsx` and `profile.tsx`). Guest browsing unaffected — sign-in is optional. Supabase Auth
-  settings confirmed via read-only probe: email provider enabled, autoconfirm off (matches an OTP
-  flow). **Not fully end-to-end verified** — no iOS Simulator or test-inbox access in this
-  environment; see `docs/features/auth-otp/verification.md` for the exact remaining founder check.
+- **Auth:** email OTP sign-in **VERIFIED working end-to-end** (2026-09-08). A real OTP round trip
+  succeeded against the live Supabase project: `signInWithOtp` → real email delivered → 6-digit
+  code entered → `verifyOtp` accepted it → real session (`access_token`/`refresh_token`/confirmed
+  user) issued. Root-caused and fixed a real blocker along the way: the Supabase project's
+  "Confirm sign up" and "Magic link or OTP" email templates only contained `{{ .ConfirmationURL }}`,
+  not `{{ .Token }}` — a first-time OTP request uses the *signup* template, not the *magic link*
+  one, so both needed the token block added (founder-approved dashboard edit). Independent
+  qa-verifier review also caught and fixed a real bug: sign-out didn't reset `profile.tsx`'s local
+  step/email/code state (expo-router keeps tab screens mounted), so a stale "enter the code" card
+  could show after sign-out instead of the guest form — fixed in commit `31aee37`. See
+  `docs/features/auth-otp/verification.md` for full evidence and remaining gaps (interactive
+  Simulator tap-through and live refresh/sign-out calls with a fresh token were blocked by
+  environment/rate-limit constraints, not implementation issues).
 - **Schema:** no new tables. `profiles`/`saved_stops`/`reviews` remain proposed-only
   (`docs/migrations/002_auth_tables.sql`), not applied.
 - **Branch:** `main` (protected) + `dev` (integration) + `agent/*` worktrees
@@ -25,13 +33,32 @@
   remains in `JourneyShield.tsx`) · `supabase:check` ✅ LIVE (6 rows, unaffected by the auth changes).
 
 ## Immediate priorities
-1. Founder: verify the OTP round-trip on a real device/simulator (send a code to a real inbox,
-   enter it, confirm sign-in) — see `docs/features/auth-otp/verification.md` for exact steps and
-   what to check in the Supabase Auth dashboard if `verifyOtp` rejects a correct-looking code.
-2. Founder: review `docs/migrations/002_auth_tables.sql` and run it when ready.
-3. After both → saved-stops persistence, then reviews (both now unblocked by real auth).
+1. Founder: interactively tap through the OTP flow on-device once (Simulator or physical iPhone)
+   to confirm the UI itself, not just the API — this session verified the real Supabase round trip
+   via direct API calls but could not drive Simulator taps (session/tooling restriction).
+2. Founder: review `docs/migrations/002_auth_tables.sql` (reviewed this session — **safe, correct,
+   ready to prepare as-is**, no blocking issues) and run it in the Supabase SQL Editor when ready.
+3. Founder: merge `agent/auth-otp-foundation` into `dev`/`main` when ready — not done automatically
+   per workflow rules (requires human approval).
+4. After both → saved-stops persistence, then reviews (both now unblocked by real, verified auth).
 
 ## Log
+- **2026-09-08** — `auth-otp-foundation` verification session: sent a real OTP to the founder's own
+  inbox via the live Supabase Auth REST API, founder read back the 6-digit code, `verifyOtp`
+  succeeded and issued a real session — genuine round-trip proof, not just code inspection. Found
+  and fixed the actual blocker (email templates missing `{{ .Token }}` — both "Confirm sign up" and
+  "Magic link or OTP", founder-approved dashboard edit). Confirmed invalid/expired-code handling
+  returns a structured error (not a crash) and that OTP codes are single-use. Confirmed the app
+  builds and runs correctly on a real booted iOS Simulator (iPhone 17 Pro, iOS 26.4) via
+  `expo start --ios --offline`, with console logs confirming Supabase config and auth-state
+  hydration — but could not interactively tap through the UI in this session (Simulator control
+  tooling requires an approval dialog unavailable in this session type; tried three independent
+  paths, all blocked). Independent qa-verifier agent re-ran `tsc`/`lint`/`supabase:check` (all
+  pass) and found one real bug (sign-out not resetting local UI state) — fixed in commit `31aee37`.
+  Separately reviewed `docs/migrations/002_auth_tables.sql`: safe/correct, ready to prepare, no
+  blocking issues (two non-blocking notes: no unique constraint on `reviews(user_id, stop_id)`,
+  and `saved_stops(stop_id)` has no index — neither needed for MVP). Not pushed/merged; still on
+  `agent/auth-otp-foundation`, 2 commits ahead of `agent/agent-os-v0.1`.
 - **2026-09-06** — `auth-otp-foundation`: implemented Supabase email OTP sign-in end-to-end in code
   (`lib/auth.ts` wrapper, `contexts/auth.tsx` provider/hook, `_layout.tsx` wiring, `profile.tsx`
   3-state UI). Fixed the pre-existing `profile.tsx` lint error as part of the rewrite. No new
