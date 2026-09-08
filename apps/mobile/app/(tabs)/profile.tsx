@@ -59,6 +59,18 @@ export default function ProfileScreen() {
     setStep('enter-email');
   }
 
+  async function handleSignOut() {
+    await signOut();
+    // Reset the local sign-in flow too — expo-router keeps tab screens
+    // mounted, so without this a re-visit after sign-out would still show
+    // the stale "enter the code" step for the old email instead of the
+    // guest form.
+    setStep('enter-email');
+    setEmail('');
+    setCode('');
+    setError(null);
+  }
+
   return (
     <View
       style={[
@@ -84,7 +96,7 @@ export default function ProfileScreen() {
           <Button
             label="Sign out"
             variant="ghost"
-            onPress={() => void signOut()}
+            onPress={() => void handleSignOut()}
             style={styles.actionButton}
           />
         </Card>
