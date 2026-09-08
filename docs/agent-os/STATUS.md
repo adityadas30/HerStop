@@ -28,6 +28,13 @@
 - **Schema proposal:** `docs/migrations/002_auth_tables.sql` — `profiles`, `saved_stops`, `reviews`
   with RLS scoped to `auth.uid()`. Reviewed (2026-09-08) as safe/correct, ready to run. **Not
   applied yet** — needs founder review + manual run in the Supabase SQL Editor.
+  Verified (2026-09-08, `db-auth-tables-verify`): `stops.id` is `text` (matches the migration's
+  `stop_id text` — no correction needed); fixed a real idempotency gap (added `drop policy if
+  exists` before every `create policy`, since Postgres has no `create policy if not exists` — a
+  second run would previously have errored partway through). Added `npm run rls:check`
+  (`apps/mobile/scripts/rls-check.mjs`) — read-only, anon-key RLS assertions for all three tables,
+  runs cleanly (reports FAIL, doesn't crash) both before and after the migration is applied. Apply
+  + rollback SQL in `docs/features/auth-tables/verification.md`.
 - **Product-language fix:** `app/(tabs)/index.tsx`'s Explore subtitle said "Verified safe stops
   within 5 miles" — a direct violation of `.claude/rules/product-boundaries.md`. Fixed to
   "Better-reviewed stops within 5 miles" (found by an independent `qa-baseline` session,
@@ -44,7 +51,7 @@
 - **Branch:** `main` (protected). **`origin/dev` has diverged and should not be built on as-is** —
   see "Branch consolidation note" below; this is a real repo-hygiene issue, not resolved here.
   `agent/*` worktrees: `db-foundation`, `auth-otp-foundation`, `qa-baseline`, `auth-foundation`,
-  `saved-stops-persistence`.
+  `saved-stops-persistence`, `db-auth-tables-verify`.
 - **Tests:** none (no Jest/Maestro). Deterministic checks = `tsc` + `lint`.
 - **Checks (2026-09-06/08, pre-saved-stops):** `tsc` ✅ · `lint` ✅ (0 errors — the pre-existing
   `profile.tsx` apostrophe error was fixed by `auth-otp-foundation`; 1 unrelated pre-existing
@@ -85,6 +92,16 @@ Flagging clearly rather than quietly rewriting a shared branch.
    not done automatically per workflow rules (requires human approval).
 
 ## Log
+- **2026-09-08** — `db-auth-tables-verify`: verified `stops.id` is `text` (3 read-only probes,
+  ruling out both `uuid` and `integer`/`bigint`) — the migration already matched, no correction
+  needed. Found and fixed a real idempotency gap in `002_auth_tables.sql` (11 `create policy`
+  statements had no guard; added `drop policy if exists` before each). Added
+  `apps/mobile/scripts/rls-check.mjs` (`npm run rls:check`), a read-only anon-key RLS verifier for
+  `profiles`/`saved_stops`/`reviews`; ran clean against the pre-migration DB (2/5 pass, 3 correctly
+  report "table doesn't exist", exit 1, no crash). Wrote apply + rollback SQL in
+  `docs/features/auth-tables/verification.md`. No SQL executed against the live DB; no
+  service-role key. Branched off `agent/db-foundation` instead of raw `dev` — same divergence
+  problem as `saved-stops-persistence` hit, documented rather than fixed here.
 - **2026-09-08** — `saved-stops-persistence`: implemented. `lib/api.ts` `getSavedStops` /
   `toggleSaveStop` are real (anon key, RLS-scoped, `__DEV__` LIVE/MOCK logging); the context reads
   auth state, loads on sign-in, clears on sign-out, and derives the list from live stop data
@@ -127,9 +144,14 @@ Flagging clearly rather than quietly rewriting a shared branch.
   own branch) first so `CLAUDE.md`/`.claude/rules/`/`docs/agent-os/` exist here; see
   `docs/features/auth-otp/verification.md` for details. `tsc`/`lint`/`supabase:check` results in
   that same file.
-- **2026-09-06** — `db-foundation` (separate branch/PR): re-confirmed live Supabase reads; verified
-  RLS blocks anon writes to `stops`; proposed `profiles`/`saved_stops`/`reviews` schema + RLS in
-  `docs/migrations/002_auth_tables.sql` (not yet applied). See `docs/features/db-foundation/`.
+- **2026-09-06** — `db-foundation`: re-confirmed live Supabase reads end-to-end (closing out
+  `db-live-reads`'s open blocker — the project host was fixed at the platform level, no app-side
+  change needed). Confirmed via non-destructive probe that RLS also blocks anon writes to `stops`.
+  Left the `Willow Creek Plaza TEST` marker row as-is (documented why — the anon key can't rename it
+  anyway, and it's harmless pre-launch). Wrote `docs/migrations/002_auth_tables.sql`, a proposed
+  (unexecuted) schema + RLS for `profiles`/`saved_stops`/`reviews`, all writes scoped to
+  `auth.uid()`. Updated architecture docs to match. No service-role key used. `tsc`/`lint` results
+  in `docs/features/db-foundation/verification.md`.
 - **2026-09-08** — Independent fresh-context verifier attempted to verify `saved-stops-persistence`
   before it existed: confirmed with the founder that the branch/feature hadn't been built yet
   (correctly left the task board entry as "blocked," not "in review," and changed nothing). Now
