@@ -25,6 +25,13 @@
 3. After that → saved-stops persistence (needs auth) is the next dependency.
 
 ## Log
+- **2026-09-08** — Attempted fresh-context verification of `agent/saved-stops-persistence` (asked
+  to confirm auth-backed saved-stops persistence, RLS isolation, guest behavior, etc.). **Branch
+  does not exist** — not local, not on `origin`, no `docs/features/saved-stops-persistence/` on
+  any branch (`agent-os-v0.1`, `auth-foundation`, `auth-otp-foundation`, `db-foundation`, `dev`,
+  `main`). Confirmed with the founder: the feature was never actually built — this task board
+  entry is still accurately "blocked," not "in review." No code was run or changed. Re-run this
+  verification once the branch actually exists.
 - **2026-09-06** — Fresh-context QA baseline pass (`agent/qa-baseline`): ran install/tsc/lint/
   supabase:check, confirmed live Supabase reads now work (contradicts prior NXDOMAIN note),
   verified core flow (onboarding → Explore → filters → detail → save → Saved tab) by tracing code
