@@ -9,7 +9,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "supabase:check": "node ./scripts/supabase-check.mjs"
+    "supabase:check": "node ./scripts/supabase-check.mjs",
+    "rls:check": "node ./scripts/rls-check.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
