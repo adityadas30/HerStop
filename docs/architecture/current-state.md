@@ -39,16 +39,24 @@ UI → `lib/api.ts` → `lib/supabase.ts` (anon key, AsyncStorage) with fallback
 
 ## Backend (verified)
 - Schema in `docs/schema.sql`: `stops` (text PK, public-read RLS) + 6 seed rows. No `saved_stops` /
-  `reviews` / `profiles` tables yet.
-- `.env` has real-format `EXPO_PUBLIC_SUPABASE_URL` / `_ANON_KEY`, but the project host returns
-  **NXDOMAIN** → live reads fail, app serves mock. See `docs/features/db-live-reads/`.
+  `reviews` / `profiles` tables yet — schema proposed (not applied) in
+  `docs/migrations/002_auth_tables.sql`.
+- Live reads **confirmed working** (2026-09-06, re-verified during `db-foundation`): with a real
+  `.env` present, `npm run supabase:check` returns 6 rows including the `Willow Creek Plaza TEST`
+  marker row. The original NXDOMAIN blocker (`docs/features/db-live-reads/`) was a dead project
+  host and has since been fixed at the project level; the app-side code needed no changes.
+  `.env` stays gitignored/per-machine — a new clone or worktree needs its own copy before this
+  is true locally.
+- RLS on `stops` confirmed to reject anon writes, not just allow anon reads (see
+  `docs/architecture/supabase-rls.md`).
 
 ## Known differences vs older docs
 - Older `architecture.md` lists tabs as "Discover, Saved, Profile"; reality is 5 tabs (above).
 - Historical "placeholder .env" theory is wrong — values are real-format but point at a dead project.
 
 ## Known issues / risks
-Dead Supabase project host · saved stops don't persist · no test runner · `packages/*` empty.
+Saved stops don't persist (needs auth + `saved_stops` table) · no test runner · `packages/*`
+directories referenced in docs aren't actually present in this worktree (nothing to audit yet).
 
 ## Commands
 See `docs/agent-os/COMMANDS.md`.
