@@ -9,6 +9,17 @@
 -- separate, not-yet-built feature; these tables and their RLS
 -- policies work the moment a user exists in auth.users, regardless
 -- of which sign-in method created it.
+--
+-- stops.id type verified (2026-09-08, read-only, against the live
+-- project — see docs/features/auth-tables/verification.md): it is
+-- `text`, matching `saved_stops.stop_id text references stops(id)`
+-- below. No correction needed.
+--
+-- Idempotency: every `create table`/`create index` already uses
+-- `if not exists`. Postgres has no `create policy if not exists`,
+-- so each policy below is preceded by a matching
+-- `drop policy if exists` — safe to run this whole file more than
+-- once (e.g. if the founder's first run is interrupted partway).
 -- ============================================================
 
 -- ------------------------------------------------------------
@@ -31,14 +42,17 @@ create table if not exists profiles (
 alter table profiles enable row level security;
 
 -- Profiles are private: no public read. A user only ever sees their own.
+drop policy if exists "Users can read own profile" on profiles;
 create policy "Users can read own profile"
   on profiles for select
   using (auth.uid() = id);
 
+drop policy if exists "Users can insert own profile" on profiles;
 create policy "Users can insert own profile"
   on profiles for insert
   with check (auth.uid() = id);
 
+drop policy if exists "Users can update own profile" on profiles;
 create policy "Users can update own profile"
   on profiles for update
   using (auth.uid() = id)
@@ -64,14 +78,17 @@ create index if not exists saved_stops_user_id_idx on saved_stops(user_id);
 alter table saved_stops enable row level security;
 
 -- No public read: a user's saved list is their own.
+drop policy if exists "Users can read own saved stops" on saved_stops;
 create policy "Users can read own saved stops"
   on saved_stops for select
   using (auth.uid() = user_id);
 
+drop policy if exists "Users can save stops for themselves" on saved_stops;
 create policy "Users can save stops for themselves"
   on saved_stops for insert
   with check (auth.uid() = user_id);
 
+drop policy if exists "Users can unsave their own stops" on saved_stops;
 create policy "Users can unsave their own stops"
   on saved_stops for delete
   using (auth.uid() = user_id);
@@ -123,23 +140,28 @@ alter table reviews enable row level security;
 -- Two SELECT policies OR together: everyone (incl. anonymous
 -- browsers) sees non-hidden reviews; an author additionally sees
 -- their own even while hidden, so they know it was moderated.
+drop policy if exists "Anyone can read visible reviews" on reviews;
 create policy "Anyone can read visible reviews"
   on reviews for select
   using (is_hidden = false);
 
+drop policy if exists "Authors can read their own review even if hidden" on reviews;
 create policy "Authors can read their own review even if hidden"
   on reviews for select
   using (auth.uid() = user_id);
 
+drop policy if exists "Authenticated users can write their own review" on reviews;
 create policy "Authenticated users can write their own review"
   on reviews for insert
   with check (auth.uid() = user_id);
 
+drop policy if exists "Authors can edit their own review" on reviews;
 create policy "Authors can edit their own review"
   on reviews for update
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
+drop policy if exists "Authors can delete their own review" on reviews;
 create policy "Authors can delete their own review"
   on reviews for delete
   using (auth.uid() = user_id);
