@@ -9,10 +9,12 @@
 | | `architecture/current-state.md` | **Audit-based** truth of what actually exists (start here). |
 | | `architecture/data-model.md` | Tables, types, and data-layer functions. |
 | | `architecture/supabase-rls.md` | RLS posture and rules. |
-| | `schema.sql` | Runnable `stops` table + seed. |
+| | `schema.sql` | Runnable `stops` table + seed (migration `001`, applied). |
+| | `migrations/` | Migration-first SQL, `002` onward — proposed until a human runs it. |
 | **Agent OS** | `agent-os/README.md` | The development harness (agents, workflow, routing, checklists). |
 | **Features** | `features/_template/` | Copy to `features/<name>/` for each task. |
 | | `features/db-live-reads/` | Live Supabase reads — blocker + tooling. |
+| | `features/db-foundation/` | Live-reads re-confirmed + `profiles`/`saved_stops`/`reviews` schema proposal. |
 
 Frontend architecture lives in `architecture.md` (mobile app structure section); no separate file
 to avoid duplication.
