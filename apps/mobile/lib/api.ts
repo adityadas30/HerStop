@@ -138,7 +138,7 @@ export async function getSavedStops(userId: string): Promise<SavedStop[]> {
  *
  * `nextSaved` is the state the UI has already optimistically switched to, so the
  * write is a plain upsert or delete. Both are idempotent, which is what makes a
- * double-tap safe: the `unique (user_id, stop_id)` constraint is never violated.
+ * double-tap harmless: the `unique (user_id, stop_id)` constraint is never violated.
  *
  * The user id comes from the stored session, never from the caller — the caller
  * cannot name a user it isn't.

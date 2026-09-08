@@ -46,8 +46,10 @@ than a 404), then work through the simulator checklist below.
 
 ## Commands run (with results)
 
-`.env` is gitignored and per-worktree; copied in from the founder's main checkout for these checks
-and deleted afterwards. No key or token was logged — only host, status, and row counts.
+`.env` is gitignored and per-worktree; copied in from the founder's main checkout so these checks
+could run. It was **left in place** (still gitignored, never committed) so the founder can run
+`npm run ios` from this worktree for the Simulator pass below without copying it again. No key or
+token was logged — only host, status, and row counts.
 
 ```
 $ npm install
@@ -132,7 +134,9 @@ describe the user's own list and sync status; none of them describes a place at 
 ## Reviewer notes
 - No service-role key used anywhere; anon key only. No SQL executed against the live DB — the only
   live calls made in this session were `GET`s (`supabase:check` and the `saved_stops` probe).
-- `.env` copied in for checks and deleted; never committed (also gitignored).
+- `.env` copied in from the founder's own checkout for the checks and deliberately left in the
+  worktree for the Simulator pass; never committed (gitignored, and confirmed absent from
+  `git status` throughout).
 - `__DEV__` logs record row counts, stop ids and event names — no tokens, no user ids, no
   coordinates.
 - `toggleSaveStop` takes a second `nextSaved` argument rather than the bare `(stopId)` in the task
