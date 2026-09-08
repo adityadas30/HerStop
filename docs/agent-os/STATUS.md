@@ -32,6 +32,10 @@
   within 5 miles" — a direct violation of `.claude/rules/product-boundaries.md`. Fixed to
   "Better-reviewed stops within 5 miles" (found by an independent `qa-baseline` session,
   2026-09-06; folded into this branch's base — see "Branch consolidation note" below).
+- **Known bug (found by `qa-baseline`, being fixed in `saved-stops-persistence`):** the Saved tab
+  (`contexts/saved-stops.tsx`) filters the hardcoded `MOCK_STOPS` array instead of the live/current
+  stop list, so a saved live stop could show stale mock data. This is goal 5 of the in-progress
+  `saved-stops-persistence` work.
 - **Branch:** `main` (protected). **`origin/dev` has diverged and should not be built on as-is** —
   see "Branch consolidation note" below; this is a real repo-hygiene issue, not resolved here.
   `agent/*` worktrees: `db-foundation`, `auth-otp-foundation`, `qa-baseline`, `auth-foundation`,
@@ -39,7 +43,8 @@
 - **Tests:** none (no Jest/Maestro). Deterministic checks = `tsc` + `lint`.
 - **Checks (2026-09-06/08, pre-saved-stops):** `tsc` ✅ · `lint` ✅ (0 errors — the pre-existing
   `profile.tsx` apostrophe error was fixed by `auth-otp-foundation`; 1 unrelated pre-existing
-  warning remains in `JourneyShield.tsx`) · `supabase:check` ✅ LIVE (6 rows).
+  warning remains in `JourneyShield.tsx`) · `supabase:check` ✅ LIVE (6 rows) ·
+  `expo export --platform ios` ✅ bundles clean (1349 modules, per `qa-baseline`).
 
 ## Branch consolidation note (2026-09-08, saved-stops-persistence)
 `agent/saved-stops-persistence` was supposed to branch off "latest `dev`" per this task's
@@ -111,6 +116,15 @@ Flagging clearly rather than quietly rewriting a shared branch.
 - **2026-09-06** — `db-foundation` (separate branch/PR): re-confirmed live Supabase reads; verified
   RLS blocks anon writes to `stops`; proposed `profiles`/`saved_stops`/`reviews` schema + RLS in
   `docs/migrations/002_auth_tables.sql` (not yet applied). See `docs/features/db-foundation/`.
+- **2026-09-08** — Independent fresh-context verifier attempted to verify `saved-stops-persistence`
+  before it existed: confirmed with the founder that the branch/feature hadn't been built yet
+  (correctly left the task board entry as "blocked," not "in review," and changed nothing). Now
+  superseded — the branch exists and this session is implementing it.
+- **2026-09-06** — `qa-baseline`: fresh-context QA pass. Confirmed live reads (contradicting the
+  stale "NXDOMAIN" note at the time), `tsc`/lint baseline, `expo export --platform ios` bundles
+  clean. Fixed one product-language violation ("Verified safe stops..." → "Better-reviewed
+  stops..." in the Explore subtitle) and found the `MOCK_STOPS`-in-Saved-tab bug (both folded into
+  this branch's base above). Full detail in `docs/features/qa-baseline/verification.md`.
 - **2026-09-06** — Built Agent OS v0.1 harness (agents, rules, agent-os docs, feature template,
   reorganized docs). Validated with `db-live-reads`: pinned live-read blocker to NXDOMAIN on the
   Supabase project host; added `.env.example`, live-vs-mock logging, and `supabase:check` script.
