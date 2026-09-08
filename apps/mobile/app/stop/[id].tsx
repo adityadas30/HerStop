@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { useAuth } from '@/contexts/auth';
 import { useSavedStops } from '@/contexts/saved-stops';
 import type { StopData } from '@/data/mock-stops';
 import { getStopById } from '@/lib/api';
@@ -13,10 +14,15 @@ export default function StopDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
-  const { isSaved, toggleSaved } = useSavedStops();
+  const router = useRouter();
+  const { isGuest } = useAuth();
+  const { isSaved, toggleSaved, loading: savedLoading, syncError } = useSavedStops();
 
   const [stop, setStop] = useState<StopData | null>(null);
   const [loading, setLoading] = useState(true);
+  // Set when a guest taps save: what they wanted to save, held until they're back
+  // from signing in.
+  const [pendingSaveId, setPendingSaveId] = useState<string | null>(null);
 
   useEffect(() => {
     getStopById(id ?? '').then((s) => {
@@ -24,6 +30,27 @@ export default function StopDetailScreen() {
       setLoading(false);
     });
   }, [id]);
+
+  function handleSavePress(stopId: string) {
+    if (isGuest) {
+      // Browsing stays open to everyone; only saving needs an account. Send them
+      // to the sign-in flow on Profile and finish the save when they return.
+      // `push` (not `navigate`) on purpose: it keeps this screen mounted underneath,
+      // which is what lets the effect below complete the save afterwards.
+      setPendingSaveId(stopId);
+      router.push('/profile');
+      return;
+    }
+    toggleSaved(stopId);
+  }
+
+  // Finish a guest's save once they're signed in — but only after their existing
+  // saved list has loaded, so this save isn't overwritten by the restore.
+  useEffect(() => {
+    if (!pendingSaveId || isGuest || savedLoading) return;
+    setPendingSaveId(null);
+    if (!isSaved(pendingSaveId)) toggleSaved(pendingSaveId);
+  }, [pendingSaveId, isGuest, savedLoading, isSaved, toggleSaved]);
 
   if (loading) {
     return (
@@ -55,7 +82,7 @@ export default function StopDetailScreen() {
         {/* Bookmark */}
         <TouchableOpacity
           style={[styles.bookmarkBtn, { backgroundColor: colors.tint }]}
-          onPress={() => toggleSaved(stop.id)}
+          onPress={() => handleSavePress(stop.id)}
           activeOpacity={0.7}>
           <IconSymbol
             name={isSaved(stop.id) ? 'bookmark.fill' : 'bookmark'}
@@ -88,6 +115,10 @@ export default function StopDetailScreen() {
         {/* Name + address */}
         <Text style={[styles.stopName, { color: colors.text }]}>{stop.name}</Text>
         <Text style={[styles.address, { color: colors.secondaryText }]}>{stop.address}</Text>
+
+        {syncError && (
+          <Text style={[styles.syncError, { color: colors.secondaryText }]}>{syncError}</Text>
+        )}
 
         {/* Tags */}
         <View style={styles.tagsRow}>
@@ -184,6 +215,9 @@ const styles = StyleSheet.create({
   address: {
     ...Typography.body,
     marginTop: -Spacing.xs,
+  },
+  syncError: {
+    ...Typography.caption,
   },
   tagsRow: {
     flexDirection: 'row',

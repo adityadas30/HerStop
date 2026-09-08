@@ -32,10 +32,15 @@
   within 5 miles" — a direct violation of `.claude/rules/product-boundaries.md`. Fixed to
   "Better-reviewed stops within 5 miles" (found by an independent `qa-baseline` session,
   2026-09-06; folded into this branch's base — see "Branch consolidation note" below).
-- **Known bug (found by `qa-baseline`, being fixed in `saved-stops-persistence`):** the Saved tab
-  (`contexts/saved-stops.tsx`) filters the hardcoded `MOCK_STOPS` array instead of the live/current
-  stop list, so a saved live stop could show stale mock data. This is goal 5 of the in-progress
-  `saved-stops-persistence` work.
+- **Fixed (2026-09-08, `saved-stops-persistence`):** the Saved tab used to filter the hardcoded
+  `MOCK_STOPS` array, so a stop loaded live from Supabase could be saved but never appeared in the
+  Saved tab. `contexts/saved-stops.tsx` now derives the list from the `getStops()` catalog (live,
+  with mock fallback) and no longer imports `MOCK_STOPS` at all.
+- **Saved stops:** client-side persistence implemented against `saved_stops` (load on sign-in,
+  clear on sign-out, optimistic write with rollback). **Inert until the migration is applied** —
+  `GET /rest/v1/saved_stops` currently returns `PGRST205` (table not in the schema cache), so a
+  signed-in save fails and rolls back by design. See
+  `docs/features/saved-stops-persistence/verification.md`.
 - **Branch:** `main` (protected). **`origin/dev` has diverged and should not be built on as-is** —
   see "Branch consolidation note" below; this is a real repo-hygiene issue, not resolved here.
   `agent/*` worktrees: `db-foundation`, `auth-otp-foundation`, `qa-baseline`, `auth-foundation`,
@@ -80,6 +85,15 @@ Flagging clearly rather than quietly rewriting a shared branch.
    not done automatically per workflow rules (requires human approval).
 
 ## Log
+- **2026-09-08** — `saved-stops-persistence`: implemented. `lib/api.ts` `getSavedStops` /
+  `toggleSaveStop` are real (anon key, RLS-scoped, `__DEV__` LIVE/MOCK logging); the context reads
+  auth state, loads on sign-in, clears on sign-out, and derives the list from live stop data
+  instead of `MOCK_STOPS`; the Saved tab invites sign-in without blocking browsing; a guest tapping
+  save on stop detail is routed to the OTP flow and the save completes on return. Sign-out-mid-
+  request, double-tap, offline-rollback and deleted-stop cases are handled explicitly. `tsc` ✅ ·
+  `lint` ✅ (no new problems) · `supabase:check` ✅ LIVE (6 rows). **Blocked from live verification:**
+  `saved_stops` does not exist in the project yet (`PGRST205`) — founder must run
+  `docs/migrations/002_auth_tables.sql`. See `docs/features/saved-stops-persistence/`.
 - **2026-09-08** — `saved-stops-persistence`: started. Found `origin/dev` diverged (see
   consolidation note above); built the branch on a merged local base instead of raw `dev`, folding
   in `db-foundation`, `auth-otp-foundation`, and `qa-baseline`'s product-language fix. Implementation

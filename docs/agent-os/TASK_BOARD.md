@@ -14,9 +14,12 @@
   the "Verified safe stops" product-language error was fixed by `qa-baseline`.)
 
 ## In progress
-- **saved-stops persistence** [supabase-db] — implementing authenticated `saved_stops` persistence
-  against `docs/migrations/002_auth_tables.sql` (not yet applied — founder run still required
-  before this can be exercised against real data). See `docs/features/saved-stops-persistence/`.
+- **saved-stops persistence** [mobile-builder] — client implementation **done** (2026-09-08):
+  Supabase-backed load/save/unsave, guest browsing preserved, Saved list derived from live stop
+  data. Remains "in progress" only because `docs/migrations/002_auth_tables.sql` has not been
+  applied — `saved_stops` returns `PGRST205`, so signed-in saves fail and roll back until the
+  founder runs it. Simulator pass still outstanding. See
+  `docs/features/saved-stops-persistence/verification.md`.
 
 ## Done
 - **agent-os-v0.1** [orchestrator] — harness build (2026-09-06).
