@@ -62,8 +62,8 @@
 - **Branches (2026-09-10):** integration branch is `agent/agent-os-v0.2` — every earlier
   `agent/*` branch is merged into it; ahead of both `dev` and `main`. **Pushed to
   `origin/agent/agent-os-v0.2` as a backup** (2026-09-10) — not merged anywhere. `origin/dev` = local `dev` = `60749f0` and is **healthy** — the
-  divergence in the consolidation note below was resolved by a merge. `main` (protected) is stale
-  at `493344c`. Worktrees: only `herstop-worktrees/dev` remains; the 8 finished task worktrees were
+  divergence in the consolidation note below was resolved by a merge. `main` (protected) is at
+  `ef220cf` — GitHub PR #1 merged `agent/agent-os-v0.1` into it (2026-09-10); still behind this branch. Worktrees: only `herstop-worktrees/dev` remains; the 8 finished task worktrees were
   removed 2026-09-10 (their branches are kept).
 - **Tests:** none (no Jest/Maestro). Deterministic checks = `tsc` + `lint`.
 - **Checks:** last full run 2026-09-10 (v0.2 pilot): `tsc` ✅ · `lint` ✅ 0 errors 0 warnings ·
