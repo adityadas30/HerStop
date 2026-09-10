@@ -20,21 +20,35 @@ Current state: `reviews` exists (002) with RLS; it is empty.
 4. New table `review_reports` — `id uuid pk`, `review_id uuid → reviews on delete cascade`,
    `reporter_id uuid → auth.users on delete cascade`, `reason text check in ('spam','offensive',
    'not_about_stop','personal_info','other')`, `note text check (char_length(note) <= 280)`,
-   `created_at`, `unique (review_id, reporter_id)`. RLS on; **no** client select/update/delete;
+   `review_note_snapshot text` (copy of the review's note at report time, so an edit can't erase
+   evidence), `created_at`, `unique (review_id, reporter_id)`. RLS on; **no** client select/update/delete;
    inserts only via `report_review()`.
-5. New table `blocked_users` — `blocker_id uuid → auth.users on delete cascade`, `blocked_id uuid →
-   auth.users on delete cascade`, `created_at`, `primary key (blocker_id, blocked_id)`,
-   `check (blocker_id <> blocked_id)`. RLS on; blocker may select/delete own rows; inserts only via
-   `block_review_author()`.
+5. New table `hidden_reviews` — `user_id uuid → auth.users on delete cascade`, `review_id uuid →
+   reviews on delete cascade`, `created_at`, `primary key (user_id, review_id)`. RLS on, **no client
+   policies**; inserts only via `hide_review()`. *(Changed after security review 2026-09-10:
+   author-wide blocking let an attacker learn which reviews one traveler wrote by blocking and
+   diffing results, and exposed the blocked user's id. Viewers hide single reviews instead.)*
+6. New table `banned_users` — `user_id uuid pk → auth.users on delete cascade`, `reason text`,
+   `created_at`. RLS on, **no client policies**. The founder inserts rows from the dashboard to block
+   an abusive account from the service (App Store 1.2). Banned authors' reviews disappear everywhere
+   and they can no longer insert or update reviews.
+7. Author delete policy recreated as `using (auth.uid() = user_id and is_hidden = false)` — deleting
+   a moderated review would cascade-delete its reports and allow re-posting.
+8. The `is_hidden` trigger also sets `created_at = now()` on insert and keeps `created_at`,
+   `stop_id`, `user_id` unchanged on update.
+9. **Publish delay:** other travelers see a review only 24 hours after creation; the author sees it
+   immediately. One named interval, easy to change. (Recommended default; founder may veto.)
+10. Whole file wrapped in `begin; set local lock_timeout = '5s'; … commit;`. `revoke execute … from
+    public, anon` on write functions.
 
 **Functions** (all `security definer`, `set search_path = public`, explicit `grant execute`):
 
 | Function | Callable by | Returns / does |
 |---|---|---|
-| `get_stop_reviews(p_stop_id text)` | anon, authenticated | Rows: `id uuid, stop_id text, overall_feeling, lighting, restroom_quality, cleanliness, staff_kindness smallint, loitering_concern text, would_stop_again boolean, time_of_visit text, note text, created_month date` (`date_trunc('month', created_at)` — month precision only), `is_mine boolean`, `is_hidden boolean`. Includes non-hidden reviews **plus** the caller's own review even if hidden. Excludes reviews whose author the caller has blocked. Newest first, limit 50. **Never returns `user_id`.** |
-| `get_stop_review_stats(p_stop_ids text[])` | anon, authenticated | One row per stop id that has ≥1 visible review: `stop_id, review_count int, avg_overall, avg_lighting, avg_restroom, avg_cleanliness, avg_staff numeric(3,2), would_stop_again_count int, loitering_high_count int, night_count int, night_low_lighting_count int` (night visits with `lighting <= 2`), `last_review_month date`. Hidden reviews excluded. Stops with no reviews are simply absent. |
+| `get_stop_reviews(p_stop_id text)` | anon, authenticated | Rows: `id uuid, stop_id text, overall_feeling, lighting, restroom_quality, cleanliness, staff_kindness smallint, loitering_concern text, would_stop_again boolean, time_of_visit text, note text, created_month date` (`date_trunc('month', created_at)` — month precision only), `is_mine boolean`, `is_hidden boolean`. Includes non-hidden reviews older than the publish delay **plus** the caller's own review (even if hidden or new). Excludes reviews the caller hid and reviews by banned authors. Newest first, limit 50. **Never returns `user_id`.** |
+| `get_stop_review_stats(p_stop_ids text[])` | anon, authenticated | One row per stop id that has ≥1 visible review: `stop_id, review_count int, avg_overall, avg_lighting, avg_restroom, avg_cleanliness, avg_staff numeric(3,2), would_stop_again_count int, loitering_high_count int, night_count int, night_low_lighting_count int` (night visits with `lighting <= 2`), `last_review_month date`. Hidden, banned-author, and not-yet-published reviews excluded. `p_stop_ids` capped at 200. Stops with no reviews are simply absent. |
 | `report_review(p_review_id uuid, p_reason text, p_note text default null)` | authenticated | Inserts a report as `auth.uid()`. Idempotent (duplicate → no error). Raises if unauthenticated or review not visible to caller. |
-| `block_review_author(p_review_id uuid)` | authenticated | Inserts `(auth.uid(), author of that review)`. No-op if it's the caller's own review or already blocked. Raises if unauthenticated. |
+| `hide_review(p_review_id uuid)` | authenticated | Inserts `(auth.uid(), p_review_id)` if the caller can see that review. No-op if own or already hidden. Raises if unauthenticated. "Not found" and "not visible" use the same error text. |
 
 Writing a review stays a direct table write: `upsert` on `reviews` with `onConflict: 'user_id,stop_id'`
 (update path allowed by the existing author update policy), `delete` for removal. `user_id` always
@@ -42,7 +56,7 @@ comes from the session.
 
 `rls:check` must be updated to the new reality: anon `select` on `reviews` returns 0 rows; anon can
 call `get_stop_reviews` and `get_stop_review_stats`; anon calling `report_review` /
-`block_review_author` is rejected; anon cannot read `review_reports` or `blocked_users`.
+`hide_review` is rejected; anon cannot read `review_reports`, `hidden_reviews`, or `banned_users`.
 
 ## 2. Scoring (`apps/mobile/lib/scoring.ts`, pure, no I/O)
 
@@ -77,10 +91,11 @@ call `get_stop_reviews` and `get_stop_review_stats`; anon calling `report_review
   (we verify no one). Empty: `"No reviews yet. Stopped here? Your review helps the next traveler."`
 - Each review: time-of-visit chip (Day / Night / Time not specified), overall ★, "Would stop again: Yes/No",
   "Loitering concern: Low/Medium/High", note, month ("Sep 2026"). Own review marked `"Your review"`,
-  and if hidden: `"Hidden after a report — only you can see it."`
+  and if hidden: `"Hidden after a report — only you can see it."`; if under 24 hours old:
+  `"Visible to other travelers 24 hours after posting."`
 - On other travelers' reviews, a `⋯` menu: `"Report review"` → reason sheet (Spam · Offensive or
   harassing · Not about this stop · Shares personal info · Other) → `"Thanks — we'll take a look."`;
-  `"Hide reviews from this traveler"` → confirm → list refreshes without them.
+  `"Hide this review"` → confirm → list refreshes without it.
 - Button `"Write a review"` (or `"Edit your review"` if `is_mine` exists). Guest → routed to Profile
   sign-in, returns to the stop (same pattern as guest save).
 
@@ -112,7 +127,7 @@ No location data. Report notes and review notes ≤280. `security-reviewer` revi
 - [ ] AC3 Explore and detail show labels from `scoreStop`; with zero reviews every stop shows Limited Data.
 - [ ] AC4 Signed-in user can create, edit, and delete their one review for a stop; detail stats/list update.
 - [ ] AC5 Guest tapping "Write a review" is routed to sign-in and lands back on that stop.
-- [ ] AC6 Report and hide-author work for another traveler's review; own review has no ⋯ menu.
+- [ ] AC6 Report and hide-review work for another traveler's review; own review has no ⋯ menu.
 - [ ] AC7 No response the client receives for other travelers' reviews contains a `user_id`.
 - [ ] AC8 Error state (RPC failure) renders the error copy, not Limited Data / empty copy.
 - [ ] AC9 `rls:check` updated and passing after 003 is applied.
