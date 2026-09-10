@@ -8,7 +8,10 @@ import { supabase } from './supabase';
 // client from `lib/supabase.ts` (anon key only).
 // ---------------------------------------------------------------------------
 
-/** Send a 6-digit email OTP code. Creates the user on first sign-in. */
+/**
+ * Email a one-time sign-in code. Creates the user on first sign-in.
+ * The code's length (6–10 digits) is a Supabase project setting, not fixed here.
+ */
 export async function sendOtp(email: string): Promise<{ error: string | null }> {
   const { error } = await supabase.auth.signInWithOtp({
     email,
@@ -18,7 +21,7 @@ export async function sendOtp(email: string): Promise<{ error: string | null }> 
   return { error: error?.message ?? null };
 }
 
-/** Verify the 6-digit code the user received by email. */
+/** Verify the code the user received by email. */
 export async function verifyOtp(
   email: string,
   token: string,
