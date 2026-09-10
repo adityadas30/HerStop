@@ -81,6 +81,7 @@ export default function StopDetailScreen() {
 
         {/* Bookmark */}
         <TouchableOpacity
+          testID="stop-detail-bookmark"
           style={[styles.bookmarkBtn, { backgroundColor: colors.tint }]}
           onPress={() => handleSavePress(stop.id)}
           activeOpacity={0.7}>
