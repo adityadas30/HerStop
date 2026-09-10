@@ -99,6 +99,25 @@ Flagging clearly rather than quietly rewriting a shared branch.
    not done automatically per workflow rules (requires human approval).
 
 ## Log
+- **2026-09-10** — **Agent OS v0.2.** Replaced the manual multi-session model (separate Desktop
+  chats named Orchestrator / DB Agent / Mobile Builder / QA, which could not actually
+  communicate) with one **HerStop Lead** session that dispatches project subagents. New roster:
+  worktree-isolated `mobile-builder` + `db-engineer`; read-only `mobile-verifier`,
+  `code-reviewer`, `security-reviewer`, `repo-scout`. Deterministic guards added in
+  `.claude/hooks/` with a 29-case regression suite. Skills: `herstop-orchestration`,
+  `ios-verify`. Maestro flows staged (Maestro still not installed). Agent Teams enabled in
+  settings; the team pilot still needs an **interactive** session.
+  **Pilot (`docs/features/harness-pilot/`) passed 9/9** after one real round trip: two builders
+  ran concurrently in separate worktrees and merged clean; the fresh verifier returned FAIL on a
+  criterion that `tsc` and `lint` both passed — the spec wrongly claimed Journey Shield renders
+  on the Safety tab (it renders on Explore). The Lead confirmed it independently, fixed the
+  *spec* rather than the code, and re-verified to PASS.
+  Three real bugs found by using the harness: the Stop-time quality gate never fired
+  (a `**` git pathspec silently matched nothing); `node_modules/` in `apps/mobile/.gitignore`
+  didn't match the worktree bootstrap's symlink; and a **stale `expo start` from an abandoned
+  worktree** was serving another branch's code to the Simulator.
+  Checks: `tsc` ✅ · `lint` ✅ 0 errors 0 warnings (last warning cleared by the pilot) ·
+  guard suite ✅ 29/29 · Level 2 Simulator ✅ with screenshots.
 - **2026-09-08** — `db-auth-tables-verify`: verified `stops.id` is `text` (3 read-only probes,
   ruling out both `uuid` and `integer`/`bigint`) — the migration already matched, no correction
   needed. Found and fixed a real idempotency gap in `002_auth_tables.sql` (11 `create policy`
