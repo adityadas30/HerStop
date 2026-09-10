@@ -3,16 +3,7 @@
 > Move lines between sections. Keep it terse. `[owner]` = agent. Link feature folders.
 
 ## Blocked
-- **saved-stops persistence** [mobile-builder] — app-side implementation **done and merged** into
-  `agent/agent-os-v0.2`: Supabase-backed load/save/unsave, guest browsing preserved, Saved list
-  derived from live stop data. **Blocked on the founder running
-  `docs/migrations/002_auth_tables.sql`** — `saved_stops` does not exist yet (`npm run rls:check`
-  2/5, re-confirmed 2026-09-10), so signed-in saves fail and roll back by design. After the run:
-  `rls:check` should read 5/5, then a Level 2 Simulator pass (signed-in save → Saved tab →
-  sign out → sign back in). See `docs/features/saved-stops-persistence/verification.md`.
-- **reviews** [db-engineer → mobile-builder] — blocked on the same migration, then on saved-stops
-  being verified. `getReviews()` in `lib/api.ts` is still a stub, and `lib/types.ts`'s `Review`
-  interface (`rating`/`body`) must be updated to the structured columns in the migration.
+_(none — migration 002 applied 2026-09-10, `rls:check` 5/5)_
 
 ## Queued
 - **auth-otp device tap-through** [founder / mobile-verifier] — the live API round trip is
@@ -27,7 +18,13 @@
   Downstream of reviews in the dependency chain.
 
 ## In progress
-_(nothing — the next step is the founder's migration run)_
+- **saved-stops live verification** [mobile-verifier] — code done and merged; table now exists.
+  Guest + code-path verification running; signed-in steps need a human sign-in (no scripted
+  Simulator taps on this machine). See `docs/features/saved-stops-persistence/verification.md`.
+- **MVP scope pass** [Lead + repo-scout] — MUST SHIP / SHOULD SHIP / CUT classification.
+- **reviews** [db-engineer → mobile-builder] — next. Table + RLS live. `getReviews()` in
+  `lib/api.ts` is still a stub; `lib/types.ts`'s `Review` (`rating`/`body`) must match the
+  structured columns.
 
 ## Done
 - **repo maintenance** [Lead] — canonical docs brought in line with repo reality; 8 merged, clean
@@ -58,8 +55,8 @@ _(nothing — the next step is the founder's migration run)_
 
 ## Dependency chain (do not skip ahead)
 `db-live-reads` ✅ → `db-foundation` ✅ + `auth-otp-foundation` ✅
-→ **founder runs `docs/migrations/002_auth_tables.sql`** ⏳ *(the only current blocker)*
-→ `saved-stops` live verification *(code already done)* → reviews → real scoring →
+→ migration 002 ✅ *(applied 2026-09-10, `rls:check` 5/5)*
+→ `saved-stops` live verification ⏳ *(code already done)* → reviews → real scoring →
 recommendation ranking. Maps/Places can scaffold after DB reads are stable. Sentry/PostHog before
 beta, after core flows.
 
