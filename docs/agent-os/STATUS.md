@@ -106,6 +106,18 @@ Flagging clearly rather than quietly rewriting a shared branch.
    approval; the branch is backed up on origin but not merged).
 
 ## Log
+- **2026-09-10** — **Ship sprint start.** Founder applied migration 002; Lead re-ran `rls:check`
+  5/5. `mobile-verifier` (fresh context) on saved stops: tsc ✅ lint ✅ supabase:check ✅
+  rls:check ✅ `expo export ios` ✅; guest browsing / guest Saved invitation ✅ (screenshots);
+  signed-in criteria **BLOCKED** (no scripted taps + OTP needs a human). Found a real defect:
+  cold launch treats a signed-in user as a guest until the session restores (Saved flashes the
+  sign-in card; a bookmark tap routes to Profile) → fix dispatched. MVP scope scout found seeded
+  `stops.rating`/`review_count`/`badge` shown as real (fabrication), a false "within 5 miles"
+  claim, placeholder Safety/Journeys tabs, no bundle id / `eas.json`. Wrote
+  `docs/features/community-reviews/` spec; found that 002's public `reviews` read policy exposes
+  reviewer `user_id` + stop + time of visit → migration 003 (privacy + report/block) in progress.
+  Confirmed Supabase's default email sender only delivers to project team members → custom SMTP
+  is a beta blocker.
 - **2026-09-10** — **Maintenance (Lead, pre-migration).** Confirmed with `git ls-remote` that
   `origin/dev` is healthy (= local `dev` = `60749f0`, old divergent tip merged in); marked the
   consolidation note resolved. Removed 8 finished worktrees (`auth-foundation`,
