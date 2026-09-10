@@ -15,10 +15,13 @@ export default function SavedScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { isGuest } = useAuth();
+  const { isGuest, loading: authLoading } = useAuth();
   const { savedStops, loading, syncError } = useSavedStops();
 
   const hasStops = savedStops.length > 0;
+  // Don't show the guest sign-in card until we actually know there's no
+  // signed-in user — auth is still restoring the session on cold launch.
+  const showGuestCard = !authLoading && isGuest;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -41,7 +44,7 @@ export default function SavedScreen() {
 
         {/* Signed out: invite sign-in, but never block browsing. Anything saved
             as a guest still shows below — it just doesn't outlive the session. */}
-        {isGuest && (
+        {showGuestCard && (
           <Card style={styles.signInCard}>
             <Text style={[styles.cardTitle, { color: colors.text }]}>
               {hasStops ? 'Keep these stops' : 'Save stops for later'}
@@ -74,7 +77,7 @@ export default function SavedScreen() {
             ))}
           </View>
         ) : (
-          !isGuest && (
+          !showGuestCard && (
             <View style={styles.emptyState}>
               <Text style={styles.emptyIcon}>🔖</Text>
               <Text style={[styles.emptyTitle, { color: colors.text }]}>No saved stops yet</Text>

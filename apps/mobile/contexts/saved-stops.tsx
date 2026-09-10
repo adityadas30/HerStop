@@ -34,7 +34,7 @@ const SavedStopsContext = createContext<SavedStopsContextValue>({
 });
 
 export function SavedStopsProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const userId = user?.id ?? null;
 
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
@@ -63,7 +63,17 @@ export function SavedStopsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Load the user's saved stops on sign-in; clear them on sign-out.
+  //
+  // While auth is still restoring the session (cold launch), we don't yet know
+  // whether there's a signed-in user. Treating that window as "no user" would
+  // briefly clear a returning user's saved ids and show the guest empty state,
+  // so we stay loading and skip both branches until auth has resolved.
   useEffect(() => {
+    if (authLoading) {
+      setLoading(true);
+      return;
+    }
+
     const loadId = ++loadIdRef.current;
 
     if (!userId) {
@@ -79,7 +89,7 @@ export function SavedStopsProvider({ children }: { children: ReactNode }) {
       setSavedIds(new Set(rows.map((row) => row.stop_id)));
       setLoading(false);
     });
-  }, [userId]);
+  }, [userId, authLoading]);
 
   const toggleSaved = useCallback(
     (id: string) => {
