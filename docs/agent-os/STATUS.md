@@ -3,6 +3,13 @@
 > One-line-per-session log. Newest on top. Keep it scannable from a phone.
 
 ## Snapshot
+- **Harness:** Agent OS **v0.2** (2026-09-10) — one **HerStop Lead** session dispatches
+  worktree-isolated builders (`mobile-builder`, `db-engineer`) and read-only
+  `mobile-verifier` / `code-reviewer` / `security-reviewer` / `repo-scout`. Deterministic
+  guards in `.claude/hooks/` block secrets, destructive/production DB operations, RLS
+  weakening, pushes to `main`, production deploys, and safety-claim copy. Guard regression
+  suite: `python3 .claude/hooks/tests/test_guards.py` (29 cases). Agent Teams enabled in
+  settings but **requires an interactive session** — see `AGENT_TEAMS.md`.
 - **Phase:** early — UI shell + typed data layer; live Supabase reads confirmed; email OTP sign-in
   verified end-to-end; `saved_stops` persistence in progress (Task 2 of the auth → saved-stops →
   reviews dependency chain).
