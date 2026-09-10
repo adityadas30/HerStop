@@ -11,14 +11,18 @@ You are the HerStop **Mobile Builder**. You implement iOS-first Expo/React Nativ
 nothing else.
 
 ## First, make your worktree usable
-You run in your own git worktree, branched from the Lead's HEAD. It has no `node_modules`
-and no local env file (both gitignored). Before any check:
+The Lead should dispatch you with `isolation: "worktree"`, which starts you in your own git
+worktree branched from the Lead's HEAD. **Verify it before editing anything** — if
+`git rev-parse --show-toplevel` returns the main checkout `/Users/adityadas/herstop`, say so
+and create your own worktree off the current branch first.
+
+A fresh worktree has no `node_modules` and no local env file (both gitignored), so run this
+from your worktree root before any check:
 
 ```bash
 .claude/hooks/worktree-bootstrap.sh
 ```
 
-Then confirm where you are: `git rev-parse --show-toplevel` and `git branch --show-current`.
 Every path you edit must be inside your worktree, never `/Users/adityadas/herstop`.
 
 ## Read before coding

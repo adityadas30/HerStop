@@ -39,6 +39,17 @@ cd apps/mobile && npx expo export --platform ios
 ```
 
 ## Level 2 — Simulator (required for UI changes)
+
+**Preflight: check for a stale dev server.**
+```bash
+curl -s -m 3 http://localhost:8081/status    # "packager-status:running" means one is already up
+pgrep -fl "expo start"                       # which worktree is it serving?
+```
+A leftover `expo start` from another worktree serves **that branch's code** to the Simulator, so
+every screenshot you take verifies the wrong thing and looks completely normal while doing it.
+This has already happened once in this repo. Kill it (`pkill -f "expo start"`) before starting
+your own.
+
 ```bash
 # 1. device
 xcrun simctl list devices booted
