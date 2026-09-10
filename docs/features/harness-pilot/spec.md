@@ -13,8 +13,12 @@ It is the only warning `npm run lint` still reports.
 - A1. The unused `IconSymbol` import is gone from `JourneyShield.tsx`.
 - A2. `npm run lint` reports **0 errors and 0 warnings**.
 - A3. `npx tsc --noEmit` passes.
-- A4. The Safety tab still renders the Journey Shield card (label "JOURNEY SHIELD",
+- A4. The **Explore** tab still renders the Journey Shield card (label "JOURNEY SHIELD",
   title "Active Monitoring", working switch) — unchanged visually.
+  *(Corrected 2026-09-10: this criterion originally said "Safety tab". It was wrong —
+  `JourneyShield` is rendered from `app/(tabs)/index.tsx:152` (Explore); `app/(tabs)/safety.tsx`
+  is a "Safety tools coming soon" placeholder. The fresh verifier caught the spec error by
+  looking at the actual screen, which is the point of Level 2.)*
 
 ## Task B — make E2E targets stable
 The staged Maestro flows in `apps/mobile/.maestro/` match on visible text, which is brittle.

@@ -73,7 +73,28 @@ Tear down when finished:
 pkill -f "expo start" || true
 ```
 
+### Navigating without taps
+There is no `idb`/`applesimutils` here and AppleScript has no Accessibility permission, so
+**scripted taps are not possible**. Navigate with deep links instead — this works well:
+```bash
+xcrun simctl openurl booted "exp://127.0.0.1:8081/--/safety"
+xcrun simctl openurl booted "exp://127.0.0.1:8081/--/(tabs)"
+xcrun simctl openurl booted "exp://127.0.0.1:8081/--/stop/1"
+```
+Confirm which screen you actually landed on from the highlighted tab in the screenshot, not from
+the URL you requested.
+
+### Confirming you are looking at live, current code
+Two cheap checks, both worth doing before trusting any screenshot:
+- `curl -s localhost:8081/status` → `packager-status:running`
+- watch the dev-server log for `[getStops] LIVE Supabase: 6 rows` — proves a fresh bundle of the
+  current branch, not a stale cache.
+
 Common failures, and what they mean:
+- `npx expo start --ios` may prompt to upgrade Expo Go in the simulator, and under `CI=1` that
+  prompt hard-fails with `CommandError: Input is required, but 'npx expo' is in non-interactive
+  mode.` Use `npx expo start --localhost` (without `--ios`) and deep-link in, or answer the
+  prompt interactively once.
 - `NXDOMAIN` / mock data on Explore → the env file is missing or the Supabase host is wrong.
   Run `npm run supabase:check` to tell live from mock. Not a UI bug.
 - Expo Go missing → first `--ios` run downloads it. Let it finish; do not hand-install.
