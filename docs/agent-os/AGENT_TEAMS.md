@@ -72,3 +72,11 @@ by the keyword `ultracode` in a prompt, or by asking for a workflow directly. Si
 promptable ("use a small workflow, 5 agents max"). Disabled via `enableWorkflows: false`.
 
 Reserve it for one large, high-value, fan-out job. It is the most expensive mode available.
+
+## Agent definition reload
+
+Newly added `.claude/agents/*.md` files become dispatchable **mid-session, after a delay** —
+observed here as several minutes between writing the definitions and the new types appearing
+(the superseded names dropped off at the same moment). If the `Agent` tool reports a type as
+"not found" right after you create it, wait or restart the session; the definition is probably
+fine.
