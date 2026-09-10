@@ -22,3 +22,4 @@ Supabase SQL Editor. Nothing in this folder is executed automatically by an agen
 |------|--------|----------|
 | `docs/schema.sql` (001) | `stops` | ✅ yes |
 | `002_auth_tables.sql` | `profiles`, `saved_stops`, `reviews` | ✅ yes — founder, 2026-09-10 (`rls:check` 5/5). Do not edit; write `003` for changes. |
+| `003_reviews_privacy_and_moderation.sql` | `reviews` (constraint + trigger + drop one policy), `review_reports`, `blocked_users`, functions `get_stop_reviews`, `get_stop_review_stats`, `report_review`, `block_review_author` | ⏳ proposed — not applied. See `docs/features/community-reviews/db-verification.md` for apply steps, pre-flight check, and rollback SQL. |
