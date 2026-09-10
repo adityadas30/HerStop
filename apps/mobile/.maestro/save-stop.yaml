@@ -1,0 +1,41 @@
+# HerStop — browse a stop and save it (Level 3).
+#
+# STATUS: staged, not yet runnable (Maestro not installed).
+#
+# This flow covers the guest path only. Persisted saving requires a signed-in user
+# AND migration 002_auth_tables.sql to have been applied; until then a signed-in
+# save rolls back by design, so asserting persistence here would be a false failure.
+appId: host.exp.Exponent
+name: HerStop open a stop and save it
+---
+- launchApp:
+    clearState: false
+
+- runFlow:
+    when:
+      visible: "Get Started"
+    commands:
+      - tapOn: "Get Started"
+
+- assertVisible: "Explore"
+
+# Open the first stop card in the list.
+- tapOn:
+    index: 0
+    text: ".*"
+    optional: false
+- takeScreenshot: /tmp/maestro-herstop-stop-detail
+
+# The detail screen must describe reported experience, never assert safety.
+- assertNotVisible: "Verified safe"
+- assertNotVisible: "Guaranteed"
+
+# Save it, then confirm it shows up in the Saved tab.
+- tapOn:
+    id: "save-stop-button"
+    optional: true
+- back
+- tapOn: "Saved"
+- assertVisible: "Saved Stops"
+- assertNotVisible: "No saved stops yet"
+- takeScreenshot: /tmp/maestro-herstop-saved
