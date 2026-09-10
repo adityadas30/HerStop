@@ -17,8 +17,8 @@
 ## Queued
 - **auth-otp device tap-through** [founder / mobile-verifier] — the live API round trip is
   verified; the sign-in UI has never been tapped through on a Simulator or iPhone.
-- **integrate into `dev` → `main`** [founder decision] — `agent/agent-os-v0.2` is 12 commits ahead
-  of `dev`, 27 ahead of `main`, and **not pushed to origin** (it exists only on this machine).
+- **integrate into `dev` → `main`** [founder decision] — `agent/agent-os-v0.2` is ahead of both;
+  backed up to `origin/agent/agent-os-v0.2` (2026-09-10), not merged.
 - **agent-teams pilot** [Lead] — must run from an **interactive** session started after the
   Agent Teams env var landed. See `AGENT_TEAMS.md`. Could not be run during the harness build.
 - **install Maestro** [founder decision] — flows staged in `apps/mobile/.maestro/`; enabling
@@ -64,4 +64,4 @@ recommendation ranking. Maps/Places can scaffold after DB reads are stable. Sent
 beta, after core flows.
 
 > Branches: cut new work from the current integration branch (`agent/agent-os-v0.2`). `dev` is
-> healthy but 12 commits behind it; `main` is 27 behind.
+> healthy but behind it; `main` is further behind.
