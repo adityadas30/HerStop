@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { StyleSheet, Switch, Text, View } from 'react-native';
 
-import { IconSymbol } from './icon-symbol';
 import { Colors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
