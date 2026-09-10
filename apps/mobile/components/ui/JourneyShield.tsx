@@ -1,27 +1,34 @@
-import { useState } from 'react';
-import { StyleSheet, Switch, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import { IconSymbol } from './icon-symbol';
 import { Colors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
+// A preview of the planned Journeys/route feature, surfaced on Explore.
+// It does not arm, activate, or monitor anything — it just opens the Journeys tab.
 export function JourneyShield() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
-  const [enabled, setEnabled] = useState(true);
+  const router = useRouter();
 
   return (
-    <View style={[styles.container, Shadows.lg, { backgroundColor: colors.card }]}>
+    <TouchableOpacity
+      testID="journey-shield-preview"
+      activeOpacity={0.8}
+      onPress={() => router.push('/(tabs)/journeys')}
+      style={[styles.container, Shadows.lg, { backgroundColor: colors.card }]}>
       <View style={styles.textWrap}>
-        <Text style={[styles.label, { color: colors.tint }]}>JOURNEY SHIELD</Text>
-        <Text style={[styles.title, { color: colors.text }]}>Active Monitoring</Text>
+        <View style={styles.labelRow}>
+          <Text style={[styles.label, { color: colors.tint }]}>JOURNEY SHIELD</Text>
+          <View style={[styles.pill, { backgroundColor: colors.tintLight }]}>
+            <Text style={[styles.pillText, { color: colors.tint }]}>COMING SOON</Text>
+          </View>
+        </View>
+        <Text style={[styles.title, { color: colors.text }]}>Plan your route ahead of time</Text>
       </View>
-      <Switch
-        value={enabled}
-        onValueChange={setEnabled}
-        trackColor={{ false: colors.border, true: colors.tint }}
-        thumbColor="#FFFFFF"
-      />
-    </View>
+      <IconSymbol name="chevron.right" size={18} color={colors.secondaryText} />
+    </TouchableOpacity>
   );
 }
 
@@ -36,13 +43,29 @@ const styles = StyleSheet.create({
   },
   textWrap: {
     flex: 1,
-    gap: 2,
+    gap: Spacing.xs,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs + 2,
   },
   label: {
     fontSize: 10,
     fontWeight: '700' as const,
     letterSpacing: 0.8,
     lineHeight: 14,
+  },
+  pill: {
+    paddingVertical: 2,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: Radius.full,
+  },
+  pillText: {
+    fontSize: 9,
+    fontWeight: '700' as const,
+    letterSpacing: 0.5,
+    lineHeight: 12,
   },
   title: {
     ...Typography.body,
