@@ -11,6 +11,14 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 /** Which step of the sign-in flow is showing, when the user is signed out. */
 type Step = 'enter-email' | 'enter-code';
 
+/**
+ * Supabase lets each project choose how many digits its email codes have
+ * (6–10), so accept that whole range instead of hardcoding one length.
+ * Hardcoding 6 once made an 8-digit code impossible to type.
+ */
+const OTP_MIN_LENGTH = 6;
+const OTP_MAX_LENGTH = 10;
+
 export default function ProfileScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
@@ -134,23 +142,27 @@ export default function ProfileScreen() {
             Enter the code sent to your email
           </Text>
           <Text style={[styles.cardBody, { color: colors.secondaryText }]}>
-            We sent a 6-digit code to {email}.
+            We sent a sign-in code to {email}.
           </Text>
           <TextInput
             style={inputStyle}
-            placeholder="123456"
+            placeholder="Code from your email"
             placeholderTextColor={colors.secondaryText}
             value={code}
-            onChangeText={setCode}
+            // Keep digits only, so a pasted code with spaces still works.
+            onChangeText={(text) => setCode(text.replace(/\D/g, ''))}
             keyboardType="number-pad"
-            maxLength={6}
+            textContentType="oneTimeCode"
+            autoComplete="one-time-code"
+            maxLength={OTP_MAX_LENGTH}
             editable={!busy}
+            testID="otp-code-input"
           />
           {error && <Text style={styles.errorText}>{error}</Text>}
           <Button
             label={busy ? 'Verifying…' : 'Verify'}
             onPress={() => void handleVerifyOtp()}
-            disabled={busy || code.trim().length === 0}
+            disabled={busy || code.length < OTP_MIN_LENGTH}
             style={[styles.actionButton, busy && styles.buttonBusy]}
           />
           <Button
