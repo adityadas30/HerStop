@@ -17,7 +17,7 @@ Look at the screen.
 | Expo dev server | **available** | `npx expo start --ios`. Installs Expo Go into the sim on first run (slow — minutes). |
 | iOS bundle export | **available** | `npx expo export --platform ios` — proves it bundles. |
 | Physical iPhone | **paired, currently unavailable** | `adi's iPhone` (iPhone 17 Pro) shows as `unavailable` in `xcrun devicectl list devices` — it must be connected and unlocked. Use Expo Go over LAN, same Wi-Fi. |
-| Maestro | **not installed** | `maestro` is not on PATH. Flows are staged in `apps/mobile/.maestro/`. Installing it needs founder approval. |
+| Maestro | **installed** (2.10.0, 2026-09-10) | `maestro --device <udid> test apps/mobile/.maestro/<flow>.yaml`. Real taps + typing. Pass secrets/emails/OTP only via `-e`, never in flow files. With several simulators booted, always use explicit UDIDs, never `booted`. |
 | Jest / unit tests | **none** | The only automated suite is `.claude/hooks/tests/test_guards.py`. |
 
 Do not claim a capability this table says you do not have.

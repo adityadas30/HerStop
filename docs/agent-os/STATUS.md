@@ -15,6 +15,15 @@
   now in live verification.
 - **Sprint (2026-09-10 → ~09-17):** ship sprint toward a TestFlight-ready MVP. Product work only;
   no harness work unless a real product failure demands it.
+- **Founder decisions (2026-09-10):** real stops from an **OpenStreetMap import** (with attribution)
+  for corridor 1 = West Lafayette → Indianapolis on I-65, then West Lafayette → Chicago (I-65/I-94);
+  no Google Places. **Foreground `expo-location`** for distance sorting, never stored, logged or sent;
+  map view is SHOULD SHIP. **Safety / Journeys / JourneyShield stay visible** as honest "Coming Soon"
+  previews that don't imply live monitoring. **Resend SMTP later** (founder handles DNS and
+  credentials); the OTP length bug came first. **Maestro approved and installed** (2.10.0); minimal
+  flows only. Bundle id **`com.adityadas.herstop`**; EAS Build approved; **no submit/release without
+  approval**; Apple membership still to be confirmed. **Sentry late in sprint**; PostHog cut. Also
+  cut: Google routing, area safety data, review photos, display names, full moderation UI.
 - **Migration 002 APPLIED (2026-09-10)** by the founder. `rls:check` 5/5 (independently re-run by
   the Lead). `profiles` / `saved_stops` / `reviews` exist with RLS. The saved-stops blocker is cleared.
 - **Backend:** Supabase client wired; **live reads CONFIRMED** (re-verified repeatedly, with a real
