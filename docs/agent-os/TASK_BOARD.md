@@ -6,25 +6,30 @@
 _(none — migration 002 applied 2026-09-10, `rls:check` 5/5)_
 
 ## Queued
-- **auth-otp device tap-through** [founder / mobile-verifier] — the live API round trip is
-  verified; the sign-in UI has never been tapped through on a Simulator or iPhone.
 - **integrate into `dev` → `main`** [founder decision] — `agent/agent-os-v0.2` is ahead of both;
   backed up to `origin/agent/agent-os-v0.2` (2026-09-10), not merged.
 - **agent-teams pilot** [Lead] — must run from an **interactive** session started after the
   Agent Teams env var landed. See `AGENT_TEAMS.md`. Could not be run during the harness build.
-- **install Maestro** [founder decision] — flows staged in `apps/mobile/.maestro/`; enabling
-  Level 3 pulls a JVM toolchain.
 - **scoring package** [mobile-builder] — pure functions in `packages/scoring`; add first Jest test.
   Downstream of reviews in the dependency chain.
 
 ## In progress
-- **saved-stops live verification** [mobile-verifier] — code done and merged; table now exists.
-  Guest + code-path verification running; signed-in steps need a human sign-in (no scripted
-  Simulator taps on this machine). See `docs/features/saved-stops-persistence/verification.md`.
-- **MVP scope pass** [Lead + repo-scout] — MUST SHIP / SHOULD SHIP / CUT classification.
-- **reviews** [db-engineer → mobile-builder] — next. Table + RLS live. `getReviews()` in
-  `lib/api.ts` is still a stub; `lib/types.ts`'s `Review` (`rating`/`body`) must match the
-  structured columns.
+Sprint dependency graph (founder priority order, 2026-09-10):
+- ✅ dev consolidation — `dev` fast-forwarded to the integration branch and pushed.
+- ✅ OTP length bug — input accepted 6 digits, Supabase sends 8; now accepts 6–10 (`fbc43c3`).
+- ✅ saved-stops cold-launch fix merged (`7fa6dd0`).
+- ⏳ **auth UI + saved-stops live QA** [mobile-verifier, Maestro, sim `7ABF361F`] — waits on the
+  founder's OTP code; "sign back in restores list" deferred to the second OTP.
+- ⏳ **migration 003** (reviews privacy + report/block) — drafted and merged; `security-reviewer`
+  running → founder approval brief → founder runs it.
+- ⏳ **community-reviews app side** [mobile-builder, worktree, sim `BBB1BA5C`, port 8083] —
+  reviews, form, report/hide, scoring labels from real reviews only, removes fabricated
+  rating/count/badge/distance. Spec: `docs/features/community-reviews/`.
+- ⏳ **Coming Soon surfaces + TestFlight config** [mobile-builder, worktree, sim `A7B10A46`, port 8082].
+- ⏳ **OSM beta stop dataset** (I-65 West Lafayette → Indianapolis) [research agent, scratchpad]
+  → seed migration (founder runs; replaces the fictional stops).
+- ⬜ foreground location + distance (`expo-location`) — after reviews merges (same files).
+- ⬜ loading/empty/error polish → Sentry → TestFlight build (founder login) → beta-readiness audit.
 
 ## Done
 - **repo maintenance** [Lead] — canonical docs brought in line with repo reality; 8 merged, clean

@@ -62,7 +62,8 @@ npm run rls:check         # read-only anon-key RLS assertions
 npm run ios               # Simulator
 ```
 Guard regression suite (from repo root): `python3 .claude/hooks/tests/test_guards.py`
-No Jest. No Maestro installed — flows staged in `apps/mobile/.maestro/`.
+No Jest. Maestro 2.10 installed (2026-09-10) — flows in `apps/mobile/.maestro/`, run with
+`maestro --device <udid> test <flow>`.
 Never run `npm run reset-project` (destroys the app).
 
 ## Where things live
