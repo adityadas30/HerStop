@@ -22,7 +22,7 @@ export function StopCard({ stop, onPress }: StopCardProps) {
   const isRecommended = stop.badge === 'recommended';
 
   return (
-    <TouchableOpacity activeOpacity={0.95} onPress={onPress}>
+    <TouchableOpacity testID={`stop-card-${stop.id}`} activeOpacity={0.95} onPress={onPress}>
       <View style={[styles.card, Shadows.md, { backgroundColor: colors.card }]}>
         {/* Image placeholder */}
         <View style={[styles.image, { backgroundColor: stop.imageColor }]}>
@@ -30,6 +30,7 @@ export function StopCard({ stop, onPress }: StopCardProps) {
 
           {/* Bookmark */}
           <TouchableOpacity
+            testID={`stop-card-bookmark-${stop.id}`}
             style={[styles.bookmarkBtn, { backgroundColor: colors.tint }]}
             onPress={() => toggleSaved(stop.id)}
             activeOpacity={0.7}>
