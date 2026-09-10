@@ -11,7 +11,9 @@ PROJECT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 MOBILE="$PROJECT/apps/mobile"
 [ -d "$MOBILE" ] || exit 0
 
-changed=$(git -C "$PROJECT" status --porcelain -- 'apps/mobile/**/*.ts' 'apps/mobile/**/*.tsx' 2>/dev/null)
+# NOTE: a `**` pathspec silently matches nothing here, which would disable this gate
+# without any error. Filter the directory listing instead.
+changed=$(git -C "$PROJECT" status --porcelain -- apps/mobile 2>/dev/null | grep -E '\.tsx?$')
 [ -z "$changed" ] && exit 0
 
 STAMP="${CLAUDE_PROJECT_DIR:-/tmp}/.claude/.quality-gate-fired"
