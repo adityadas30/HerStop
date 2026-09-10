@@ -15,7 +15,7 @@ export default function StopDetailScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const router = useRouter();
-  const { isGuest } = useAuth();
+  const { isGuest, loading: authLoading } = useAuth();
   const { isSaved, toggleSaved, loading: savedLoading, syncError } = useSavedStops();
 
   const [stop, setStop] = useState<StopData | null>(null);
@@ -32,6 +32,10 @@ export default function StopDetailScreen() {
   }, [id]);
 
   function handleSavePress(stopId: string) {
+    // Auth is still restoring the session — we don't yet know if there's a
+    // signed-in user, so ignore the tap rather than guessing guest and
+    // routing away from this screen.
+    if (authLoading) return;
     if (isGuest) {
       // Browsing stays open to everyone; only saving needs an account. Send them
       // to the sign-in flow on Profile and finish the save when they return.
