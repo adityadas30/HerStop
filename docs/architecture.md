@@ -1,5 +1,9 @@
 # HerStop — Architecture
 
+> **Intended design.** For what actually exists right now, read
+> `docs/architecture/current-state.md` — it is audit-based and **it wins** wherever the two
+> disagree.
+
 ## Repo Structure
 
 ```
@@ -20,10 +24,12 @@ app/
   _layout.tsx         # Root Stack — onboarding, tabs, stop detail
   onboarding.tsx      # Welcome screen (shown once, logic added with storage)
   (tabs)/
-    _layout.tsx       # Tab navigator — Discover, Saved, Profile
-    index.tsx         # Discover tab — route input + stop results
-    saved.tsx         # Saved stops (requires auth)
-    profile.tsx       # Profile / auth entry point
+    _layout.tsx       # Tab navigator — Explore, Safety, Journeys, Saved, Profile
+    index.tsx         # Explore tab — search + filters + stop results
+    safety.tsx        # Safety (placeholder)
+    journeys.tsx      # Journeys (placeholder)
+    saved.tsx         # Saved stops (persisted once signed in)
+    profile.tsx       # Profile / email-OTP sign-in
   stop/
     [id].tsx          # Stop detail — score, reviews, amenities
 
@@ -65,7 +71,7 @@ User enters destination
 | Language | TypeScript | Strict mode everywhere |
 | Navigation | Expo Router v3 | File-based, typed routes |
 | Styling | React Native StyleSheet | No heavy UI lib in v1 |
-| Backend | Supabase | Auth (OTP), DB, Storage — phase 2 |
+| Backend | Supabase | Auth (email OTP) verified working; live `stops` reads confirmed |
 | Maps | Google Maps APIs | Routes + Places — phase 2 |
 | Analytics | PostHog | Phase 3 |
 | Errors | Sentry | Phase 3 |
@@ -73,6 +79,21 @@ User enters destination
 ## Key Design Decisions
 
 - **No map in v1 shell** — map view added when Google Maps is integrated
-- **No auth in v1 shell** — OTP login added with Supabase
+- **Browse without an account** — auth gates saving and reviewing, never browsing
+- **Mock fallback stays** — `lib/api.ts` falls back to `data/mock-stops.ts` when Supabase is
+  unreachable, so the app is always demoable. Removing it is a founder decision.
 - **Scoring is a pure package** — `packages/scoring` has zero RN deps, testable in isolation
-- **Shared types in `packages/types`** — Stop, Review, User types shared between mobile and any future web surface
+  (planned; the directory is still empty)
+- **Shared types in `packages/types`** — shared between mobile and any future web surface
+  (planned; the directory is still empty)
+
+## Scoring model v1
+community reviews **70%** · area safety context **20%** · confidence **10%**.
+Low review count forces **Limited Data**. Weak lighting plus nighttime lowers recommendations.
+Repeated loitering concerns lower them strongly. Output is a recommendation band
+(Recommended Stop / Good Option / Use Caution / Limited Data) — never a safety verdict.
+
+## Review model
+Structured fields: overall feeling · lighting · restroom quality · cleanliness · staff kindness ·
+loitering concern / strange vibe · would stop again alone · short optional note · time of visit.
+Designed with moderation, reporting, abuse prevention, and privacy in mind.
