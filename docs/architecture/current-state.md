@@ -27,8 +27,8 @@ herstop/
 ```
 
 ## Branches (2026-09-10)
-Integration branch: `agent/agent-os-v0.2` — contains every earlier `agent/*` branch; local only
-(not pushed). `dev` = `origin/dev` = `60749f0`, healthy, 12 commits behind. `main` is 27 behind.
+Integration branch: `agent/agent-os-v0.2` — contains every earlier `agent/*` branch; backed up to
+origin, not merged. `dev` = `origin/dev` = `60749f0`, healthy, behind it. `main` is further behind.
 Cut new work from the integration branch. Details: `docs/agent-os/STATUS.md`.
 
 ## Routes (verified)
@@ -80,8 +80,7 @@ UI → `lib/api.ts` → `lib/supabase.ts` (anon key, AsyncStorage) with fallback
 
 ## Known issues / risks
 Migration 002 not applied (the current blocker) · no device tap-through of sign-in or saved stops ·
-no test runner (no Jest; Maestro not installed) · `Review` type out of date · `packages/*` empty ·
-integration branch not pushed.
+no test runner (no Jest; Maestro not installed) · `Review` type out of date · `packages/*` empty.
 
 ## Commands
 See `docs/agent-os/COMMANDS.md`.

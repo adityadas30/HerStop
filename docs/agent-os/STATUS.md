@@ -59,9 +59,9 @@
   `GET /rest/v1/saved_stops` currently returns `PGRST205` (table not in the schema cache), so a
   signed-in save fails and rolls back by design. See
   `docs/features/saved-stops-persistence/verification.md`.
-- **Branches (2026-09-10):** integration branch is `agent/agent-os-v0.2` @ `9b69e79` — every
-  earlier `agent/*` branch is merged into it; 12 commits ahead of `dev`, 27 ahead of `main`, and
-  **not pushed** (local only). `origin/dev` = local `dev` = `60749f0` and is **healthy** — the
+- **Branches (2026-09-10):** integration branch is `agent/agent-os-v0.2` — every earlier
+  `agent/*` branch is merged into it; ahead of both `dev` and `main`. **Pushed to
+  `origin/agent/agent-os-v0.2` as a backup** (2026-09-10) — not merged anywhere. `origin/dev` = local `dev` = `60749f0` and is **healthy** — the
   divergence in the consolidation note below was resolved by a merge. `main` (protected) is stale
   at `493344c`. Worktrees: only `herstop-worktrees/dev` remains; the 8 finished task worktrees were
   removed 2026-09-10 (their branches are kept).
@@ -104,8 +104,8 @@ Flagging clearly rather than quietly rewriting a shared branch.
    Saved tab → sign out → sign back in), then plan reviews.
 3. Founder: tap through the OTP sign-in flow once on a Simulator or iPhone — verified via the live
    API, never via the UI.
-4. Founder: decide when to push `agent/agent-os-v0.2` and integrate it into `dev` → `main`
-   (requires approval; the branch is local-only today).
+4. Founder: decide when to integrate `agent/agent-os-v0.2` into `dev` → `main` (requires
+   approval; the branch is backed up on origin but not merged).
 
 ## Log
 - **2026-09-10** — **Maintenance (Lead, pre-migration).** Confirmed with `git ls-remote` that
@@ -117,7 +117,8 @@ Flagging clearly rather than quietly rewriting a shared branch.
   files (`node_modules`, `.expo/`, `.env` copies whose values match the main checkout's). All
   branches kept; the `dev` worktree kept. Rewrote `docs/architecture/current-state.md`, which still
   described auth and saved stops as unbuilt. Final read-only review of `002_auth_tables.sql`: no
-  blockers, recommend RUN. No app code or database changes.
+  blockers, recommend RUN. No app code or database changes. Pushed `agent/agent-os-v0.2` to
+  origin as a backup branch at the founder's request — nothing merged.
 - **2026-09-10** — **Agent OS v0.2.** Replaced the manual multi-session model (separate Desktop
   chats named Orchestrator / DB Agent / Mobile Builder / QA, which could not actually
   communicate) with one **HerStop Lead** session that dispatches project subagents. New roster:
