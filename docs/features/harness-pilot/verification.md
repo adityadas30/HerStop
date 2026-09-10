@@ -66,9 +66,38 @@ and dispatched a targeted re-verification of that single criterion.
 
 ## Round 2 — re-verification of corrected A4
 
-Re-verified after the spec correction. No source code changed between rounds.
+**VERDICT: PASS.** Re-verified after the spec correction; no source code changed between rounds.
 
-_(Result appended below.)_
+| Criterion | Result | Evidence |
+|---|---|---|
+| A4 (corrected) Explore tab renders Journey Shield | **PASS** | Screenshot `/tmp/herstop-a4.png`: **Explore** highlighted in the tab bar; card shows "JOURNEY SHIELD" label, "Active Monitoring" title, and a rendered toggle in the on position. |
+
+Bundle freshness was established, not assumed: `iOS Bundled 912ms ... (1426 modules)` followed by
+`[getStops] LIVE Supabase: 6 rows`. Preflight confirmed port 8081 was refused before the run;
+the server was torn down after and the port confirmed refused again.
+
+Notably, the verifier caught its **own** first screenshot coming from a stale cached Expo Go
+session and discarded it as evidence rather than reporting it — the discipline the `ios-verify`
+skill asks for, applied without being reminded.
+
+**Final: 9 of 9 acceptance criteria PASS** (A1–A4, B1–B5).
+
+## Orchestration criteria — what the pilot was really testing
+
+| # | Criterion | Result |
+|---|---|---|
+| 1 | Lead creates dependency-aware tasks | **PASS** — intent/spec/plan + ownership table |
+| 2 | Lead autonomously dispatches real project subagents | **PASS** — 2 builders + 2 verifier runs, no founder involvement |
+| 3 | Subagents execute in their own contexts | **PASS** |
+| 4 | Worktree isolation works under concurrency | **PASS** — separate worktrees, both merged `--no-ff` with no conflict |
+| 5 | Results return to the Lead with no copy/paste | **PASS** |
+| 6 | Lead dispatches an independent verifier | **PASS** — fresh context, read-only, read the spec not the summaries |
+| 7 | Verifier returns PASS/FAIL | **PASS** — returned a real FAIL, with evidence |
+| 8 | Lead reacts correctly | **PASS** — confirmed the finding independently, identified it as a *spec* defect rather than blindly routing it to a builder, fixed the spec, re-verified |
+| 9 | Hooks and tests actually execute | **PASS** — guards blocked the Lead's own commands live; 29-case suite ran in both rounds |
+
+Not demonstrated: the **Agent Teams** pilot. Teams require an interactive session and the
+harness was built in a non-interactive one. See `docs/agent-os/AGENT_TEAMS.md`.
 
 ## Environment findings worth keeping
 - `npx expo start --ios` prompts to upgrade Expo Go in the simulator and **hard-fails under
