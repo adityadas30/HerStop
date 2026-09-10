@@ -1,7 +1,8 @@
 # Architecture — Current State (audit-based)
 
-> Ground truth from a repository audit on **2026-09-06**. Where this conflicts with older docs,
-> **this file wins.** Update it after meaningful structural changes.
+> Ground truth from a repository audit. Original audit **2026-09-06**; re-audited **2026-09-10**
+> (auth, saved stops, branches). Where this conflicts with older docs, **this file wins.**
+> Update it after meaningful structural changes.
 
 ## Stack (verified)
 Monorepo, **npm** (`package-lock.json`). Node `.nvmrc` = `lts/*`.
@@ -15,48 +16,72 @@ herstop/
   apps/mobile/            # the app (all config lives here, not at root)
     app/                  # Expo Router routes
     components/ components/ui/
-    contexts/ hooks/ lib/ data/ constants/
+    contexts/             # auth.tsx, saved-stops.tsx
+    hooks/ lib/ data/ constants/
+    scripts/              # supabase-check.mjs, rls-check.mjs (read-only live checks)
+    .maestro/             # staged E2E flows — Maestro NOT installed
     .env  .env.example
   packages/{ui,types,scoring}/   # EMPTY placeholders (no package.json yet)
   docs/
   CLAUDE.md
 ```
 
+## Branches (2026-09-10)
+Integration branch: `agent/agent-os-v0.2` — contains every earlier `agent/*` branch; local only
+(not pushed). `dev` = `origin/dev` = `60749f0`, healthy, 12 commits behind. `main` is 27 behind.
+Cut new work from the integration branch. Details: `docs/agent-os/STATUS.md`.
+
 ## Routes (verified)
+- `app/_layout.tsx` → `ThemeProvider` › `AuthProvider` › `SavedStopsProvider` › `Stack`.
+  Auth is outermost so the saved-stops context can read the signed-in user.
 - `app/index.tsx` → redirects to onboarding.
 - `app/onboarding.tsx` → welcome + "decision support, not safety guarantees" disclaimer.
 - `app/(tabs)/_layout.tsx` → tabs: **Explore, Safety, Journeys, Saved, Profile**.
   - `(tabs)/index.tsx` (Explore) — `getStops()`, search, filter chips, `StopCard` list → `/stop/[id]`.
-  - `(tabs)/saved.tsx` — `useSavedStops()`; `(tabs)/safety.tsx`, `(tabs)/journeys.tsx` are placeholders.
-  - `(tabs)/profile.tsx` — guest view (no auth yet).
-- `app/stop/[id].tsx` — `getStopById(id)`; bookmark toggles in-memory saved context.
+  - `(tabs)/saved.tsx` — `useSavedStops()`; guests see a sign-in invitation, browsing is not blocked.
+  - `(tabs)/safety.tsx`, `(tabs)/journeys.tsx` — placeholders.
+  - `(tabs)/profile.tsx` — email OTP sign-in: enter email → enter 6-digit code → signed in; sign-out
+    resets the local step/email/code state.
+- `app/stop/[id].tsx` — `getStopById(id)`; bookmark calls `toggleSaved`. A guest tapping save is
+  routed to Profile to sign in, and the pending save completes on return.
+
+## Auth (verified)
+Supabase email OTP. `lib/auth.ts` wraps `sendOtp` / `verifyOtp` / `signOut` / `getSession` /
+`onAuthStateChange`; `contexts/auth.tsx` exposes `useAuth()` (`user`, `isGuest`, `loading`, …).
+Session persisted via AsyncStorage in `lib/supabase.ts`. **Verified end-to-end against the live API**
+(real email → real code → real session, 2026-09-08). Not yet tapped through on a device.
+See `docs/features/auth-otp/verification.md`.
 
 ## Data flow (verified)
 UI → `lib/api.ts` → `lib/supabase.ts` (anon key, AsyncStorage) with fallback to `data/mock-stops.ts`.
 - `getStops()` / `getStopById()` query Supabase, map rows via `dbToStopData`, else fall back to mock.
-- `getSavedStops()`, `toggleSaveStop()`, `getReviews()` are **stubs** (return empty / `{saved:false}`).
-- Saved state = **in-memory only** (`contexts/saved-stops.tsx`); not persisted, not user-scoped.
+- `getSavedStops(userId)` — real: selects `saved_stops` for the user (RLS-scoped). No mock data on
+  error — returns `[]` and logs it, because inventing saved stops would be wrong.
+- `toggleSaveStop(stopId, nextSaved)` — real: upsert with `ignoreDuplicates` (save) or delete
+  (unsave); user id taken from the session, never the caller.
+- `getReviews()` — **still a stub** (returns `[]`). `lib/types.ts`'s `Review` (`rating`/`body`)
+  does not yet match the structured columns in the proposed `reviews` table.
+- `contexts/saved-stops.tsx` — loads saved ids on sign-in, clears on sign-out, optimistic toggle
+  with rollback on error. The Saved list is derived from the `getStops()` catalog (live, with mock
+  fallback), not from `MOCK_STOPS`.
 
-## Backend (verified)
-- Schema in `docs/schema.sql`: `stops` (text PK, public-read RLS) + 6 seed rows. No `saved_stops` /
-  `reviews` / `profiles` tables yet — schema proposed (not applied) in
-  `docs/migrations/002_auth_tables.sql`.
-- Live reads **confirmed working** (2026-09-06, re-verified during `db-foundation`): with a real
-  `.env` present, `npm run supabase:check` returns 6 rows including the `Willow Creek Plaza TEST`
-  marker row. The original NXDOMAIN blocker (`docs/features/db-live-reads/`) was a dead project
-  host and has since been fixed at the project level; the app-side code needed no changes.
-  `.env` stays gitignored/per-machine — a new clone or worktree needs its own copy before this
-  is true locally.
-- RLS on `stops` confirmed to reject anon writes, not just allow anon reads (see
-  `docs/architecture/supabase-rls.md`).
-
-## Known differences vs older docs
-- Older `architecture.md` lists tabs as "Discover, Saved, Profile"; reality is 5 tabs (above).
-- Historical "placeholder .env" theory is wrong — values are real-format but point at a dead project.
+## Backend (verified 2026-09-10)
+- One Supabase project, host `xnkjqcygzjlspeagcoal.supabase.co` (from `apps/mobile/.env`; no
+  staging project exists). Live reads work: `npm run supabase:check` → LIVE, 6 rows incl. the
+  `Willow Creek Plaza TEST` marker.
+- Applied schema: `docs/schema.sql` — `stops` only (text PK, public-read RLS, anon writes rejected
+  with `42501`). No explicit grants; access relies on the project's default privileges + RLS.
+- **Not applied:** `docs/migrations/002_auth_tables.sql` (`profiles`, `saved_stops`, `reviews`).
+  `npm run rls:check` → 2/5, the 3 failures being "table does not exist yet".
+- Consequence: saved-stops code is live but **inert** — a signed-in save hits `PGRST205` and rolls
+  back by design until the migration runs.
+- The app never writes `profiles` yet (the migration comment anticipates an app-side upsert on
+  first sign-in; not built). Nothing reads it either.
 
 ## Known issues / risks
-Saved stops don't persist (needs auth + `saved_stops` table) · no test runner · `packages/*`
-directories referenced in docs aren't actually present in this worktree (nothing to audit yet).
+Migration 002 not applied (the current blocker) · no device tap-through of sign-in or saved stops ·
+no test runner (no Jest; Maestro not installed) · `Review` type out of date · `packages/*` empty ·
+integration branch not pushed.
 
 ## Commands
 See `docs/agent-os/COMMANDS.md`.
