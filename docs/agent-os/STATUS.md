@@ -11,11 +11,12 @@
   suite: `python3 .claude/hooks/tests/test_guards.py` (29 cases). Agent Teams enabled in
   settings but **requires an interactive session** — see `AGENT_TEAMS.md`.
 - **Phase:** early — UI shell + typed data layer; live Supabase reads confirmed; email OTP sign-in
-  verified end-to-end against the live API; `saved_stops` persistence **implemented and merged,
-  blocked only on the founder running `docs/migrations/002_auth_tables.sql`**.
-- **Current blocker (2026-09-10):** that migration. `npm run rls:check` → 2/5 (all 3 FAILs are
-  "table does not exist yet"). Nothing downstream — saved-stops live verification, reviews,
-  scoring — can move until it runs.
+  verified end-to-end against the live API; `saved_stops` persistence implemented and merged,
+  now in live verification.
+- **Sprint (2026-09-10 → ~09-17):** ship sprint toward a TestFlight-ready MVP. Product work only;
+  no harness work unless a real product failure demands it.
+- **Migration 002 APPLIED (2026-09-10)** by the founder. `rls:check` 5/5 (independently re-run by
+  the Lead). `profiles` / `saved_stops` / `reviews` exist with RLS. The saved-stops blocker is cleared.
 - **Backend:** Supabase client wired; **live reads CONFIRMED** (re-verified repeatedly, with a real
   `.env` present) — `stops` returns 6 rows incl. the `Willow Creek Plaza TEST` marker. `.env` is
   gitignored/per-machine, so a fresh clone/worktree needs its own copy. See
@@ -38,7 +39,7 @@
 - **Schema proposal:** `docs/migrations/002_auth_tables.sql` — `profiles`, `saved_stops`, `reviews`
   with RLS scoped to `auth.uid()`. Reviewed (2026-09-08) as safe/correct, ready to run; final
   read-only re-review (Lead, 2026-09-10) found no blockers and confirmed the file is byte-identical
-  to the reviewed version. **Not applied yet** — needs a manual founder run in the Supabase SQL Editor.
+  to the reviewed version. **Applied by the founder 2026-09-10; `rls:check` 5/5.**
   Verified (2026-09-08, `db-auth-tables-verify`): `stops.id` is `text` (matches the migration's
   `stop_id text` — no correction needed); fixed a real idempotency gap (added `drop policy if
   exists` before every `create policy`, since Postgres has no `create policy if not exists` — a
@@ -55,9 +56,8 @@
   Saved tab. `contexts/saved-stops.tsx` now derives the list from the `getStops()` catalog (live,
   with mock fallback) and no longer imports `MOCK_STOPS` at all.
 - **Saved stops:** client-side persistence implemented against `saved_stops` (load on sign-in,
-  clear on sign-out, optimistic write with rollback). **Inert until the migration is applied** —
-  `GET /rest/v1/saved_stops` currently returns `PGRST205` (table not in the schema cache), so a
-  signed-in save fails and rolls back by design. See
+  clear on sign-out, optimistic write with rollback). The table now exists (migration 002 applied
+  2026-09-10); live signed-in verification in progress. See
   `docs/features/saved-stops-persistence/verification.md`.
 - **Branches (2026-09-10):** integration branch is `agent/agent-os-v0.2` — every earlier
   `agent/*` branch is merged into it; ahead of both `dev` and `main`. **Pushed to
@@ -97,11 +97,9 @@ fast-forward or reset `origin/dev` to the real lineage, or formally merge these 
 Flagging clearly rather than quietly rewriting a shared branch.
 
 ## Immediate priorities
-1. **Founder: run `docs/migrations/002_auth_tables.sql`** in the Supabase SQL Editor (final
-   review 2026-09-10: recommend RUN). Then `npm run rls:check` from `apps/mobile/` → expect 5/5,
-   and record the run here and in `docs/migrations/README.md`.
-2. Lead: once 5/5 — dispatch `mobile-verifier` for a Level 2 saved-stops pass (signed-in save →
-   Saved tab → sign out → sign back in), then plan reviews.
+1. ~~Founder: run `002_auth_tables.sql`~~ — done 2026-09-10, `rls:check` 5/5.
+2. Lead: saved-stops live verification (guest + signed-in), then reviews → scoring → ranking,
+   after an MVP MUST/SHOULD/CUT scope pass.
 3. Founder: tap through the OTP sign-in flow once on a Simulator or iPhone — verified via the live
    API, never via the UI.
 4. Founder: decide when to integrate `agent/agent-os-v0.2` into `dev` → `main` (requires

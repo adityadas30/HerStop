@@ -21,4 +21,4 @@ Supabase SQL Editor. Nothing in this folder is executed automatically by an agen
 | File | Tables | Applied? |
 |------|--------|----------|
 | `docs/schema.sql` (001) | `stops` | ✅ yes |
-| `002_auth_tables.sql` | `profiles`, `saved_stops`, `reviews` | ❌ not yet — proposed, needs founder review + run |
+| `002_auth_tables.sql` | `profiles`, `saved_stops`, `reviews` | ✅ yes — founder, 2026-09-10 (`rls:check` 5/5). Do not edit; write `003` for changes. |
