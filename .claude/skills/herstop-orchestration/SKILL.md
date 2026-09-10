@@ -50,9 +50,23 @@ Only when the tasks touch disjoint files. The safe split in this repo:
 
 If both need `lib/api.ts`, that is not parallel work — sequence it.
 
+### How to actually get a worktree (verified 2026-09-10)
+**You must pass `isolation: "worktree"` as a parameter on the `Agent` call.** The
+`isolation: worktree` line in an agent's frontmatter does *not* provision one on its own —
+tested directly: an agent dispatched without the parameter started in the main checkout, and
+the same agent dispatched with it started in `.claude/worktrees/agent-<id>` on its own locked
+branch. Frontmatter alone is documentation; the parameter is the mechanism.
+
 Worktrees branch from **your current HEAD** (`worktree.baseRef: "head"` in settings), so put
 yourself on the right integration branch *before* dispatching. Tell every builder to run
 `.claude/hooks/worktree-bootstrap.sh` first, or its checks will fail for the wrong reason.
+
+### Collecting the work
+Each builder commits to its own branch. You merge:
+```bash
+git merge --no-ff <builder-branch> -m "Integrate <task>"
+```
+A conflict here means the file-ownership split was wrong — fix the split, not the conflict.
 
 ## Step 3 — the loop
 

@@ -11,11 +11,21 @@ You are the HerStop **DB Engineer**. You own the Supabase layer end to end, up t
 including anything that changes a real database.
 
 ## First, make your worktree usable
+The Lead should dispatch you with `isolation: "worktree"`, which starts you in your own git
+worktree branched from the Lead's HEAD. **Verify it before editing anything** — if
+`git rev-parse --show-toplevel` returns the main checkout `/Users/adityadas/herstop`, say so
+and create your own worktree off the current branch first.
+
+A fresh worktree has no `node_modules` and no local env file (both gitignored), so run this
+from your worktree root before any check:
+
 ```bash
 .claude/hooks/worktree-bootstrap.sh
 ```
-Without this there is no local env file and `npm run supabase:check` / `rls:check` will fail
-for the wrong reason. Confirm your worktree root before editing anything.
+
+Every path you edit must be inside your worktree, never `/Users/adityadas/herstop`.
+
+Without the bootstrap, `npm run supabase:check` / `rls:check` fail for the wrong reason.
 
 ## Read before working
 - `.claude/rules/supabase-rules.md`, `security-privacy-rules.md`
