@@ -11,8 +11,11 @@
   suite: `python3 .claude/hooks/tests/test_guards.py` (29 cases). Agent Teams enabled in
   settings but **requires an interactive session** — see `AGENT_TEAMS.md`.
 - **Phase:** early — UI shell + typed data layer; live Supabase reads confirmed; email OTP sign-in
-  verified end-to-end; `saved_stops` persistence in progress (Task 2 of the auth → saved-stops →
-  reviews dependency chain).
+  verified end-to-end against the live API; `saved_stops` persistence **implemented and merged,
+  blocked only on the founder running `docs/migrations/002_auth_tables.sql`**.
+- **Current blocker (2026-09-10):** that migration. `npm run rls:check` → 2/5 (all 3 FAILs are
+  "table does not exist yet"). Nothing downstream — saved-stops live verification, reviews,
+  scoring — can move until it runs.
 - **Backend:** Supabase client wired; **live reads CONFIRMED** (re-verified repeatedly, with a real
   `.env` present) — `stops` returns 6 rows incl. the `Willow Creek Plaza TEST` marker. `.env` is
   gitignored/per-machine, so a fresh clone/worktree needs its own copy. See
@@ -33,8 +36,9 @@
   Simulator tap-through and live refresh/sign-out calls with a fresh token were blocked by
   environment/rate-limit constraints, not implementation issues).
 - **Schema proposal:** `docs/migrations/002_auth_tables.sql` — `profiles`, `saved_stops`, `reviews`
-  with RLS scoped to `auth.uid()`. Reviewed (2026-09-08) as safe/correct, ready to run. **Not
-  applied yet** — needs founder review + manual run in the Supabase SQL Editor.
+  with RLS scoped to `auth.uid()`. Reviewed (2026-09-08) as safe/correct, ready to run; final
+  read-only re-review (Lead, 2026-09-10) found no blockers and confirmed the file is byte-identical
+  to the reviewed version. **Not applied yet** — needs a manual founder run in the Supabase SQL Editor.
   Verified (2026-09-08, `db-auth-tables-verify`): `stops.id` is `text` (matches the migration's
   `stop_id text` — no correction needed); fixed a real idempotency gap (added `drop policy if
   exists` before every `create policy`, since Postgres has no `create policy if not exists` — a
@@ -55,17 +59,22 @@
   `GET /rest/v1/saved_stops` currently returns `PGRST205` (table not in the schema cache), so a
   signed-in save fails and rolls back by design. See
   `docs/features/saved-stops-persistence/verification.md`.
-- **Branch:** `main` (protected). **`origin/dev` has diverged and should not be built on as-is** —
-  see "Branch consolidation note" below; this is a real repo-hygiene issue, not resolved here.
-  `agent/*` worktrees: `db-foundation`, `auth-otp-foundation`, `qa-baseline`, `auth-foundation`,
-  `saved-stops-persistence`, `db-auth-tables-verify`.
+- **Branches (2026-09-10):** integration branch is `agent/agent-os-v0.2` @ `9b69e79` — every
+  earlier `agent/*` branch is merged into it; 12 commits ahead of `dev`, 27 ahead of `main`, and
+  **not pushed** (local only). `origin/dev` = local `dev` = `60749f0` and is **healthy** — the
+  divergence in the consolidation note below was resolved by a merge. `main` (protected) is stale
+  at `493344c`. Worktrees: only `herstop-worktrees/dev` remains; the 8 finished task worktrees were
+  removed 2026-09-10 (their branches are kept).
 - **Tests:** none (no Jest/Maestro). Deterministic checks = `tsc` + `lint`.
-- **Checks (2026-09-06/08, pre-saved-stops):** `tsc` ✅ · `lint` ✅ (0 errors — the pre-existing
-  `profile.tsx` apostrophe error was fixed by `auth-otp-foundation`; 1 unrelated pre-existing
-  warning remains in `JourneyShield.tsx`) · `supabase:check` ✅ LIVE (6 rows) ·
-  `expo export --platform ios` ✅ bundles clean (1349 modules, per `qa-baseline`).
+- **Checks:** last full run 2026-09-10 (v0.2 pilot): `tsc` ✅ · `lint` ✅ 0 errors 0 warnings ·
+  guard suite ✅ 29/29 · Level 2 Simulator ✅. Re-run 2026-09-10 (maintenance): `supabase:check` ✅
+  LIVE (6 rows) · `rls:check` 2/5 (expected before the migration). Earlier:
+  `expo export --platform ios` ✅ bundles clean (1349 modules, `qa-baseline`, 2026-09-06).
 
-## Branch consolidation note (2026-09-08, saved-stops-persistence)
+## Branch consolidation note (2026-09-08, saved-stops-persistence) — RESOLVED
+> **Resolved as of 2026-09-10:** `origin/dev` was repaired by a merge — `origin/dev` = local `dev`
+> = `60749f0`, and the old tip `89c9237` is now its ancestor. Kept below as history; do not act on it.
+
 `agent/saved-stops-persistence` was supposed to branch off "latest `dev`" per this task's
 instructions. **`origin/dev` (tip `89c9237`/`b183edb`, "Configure Agent OS harness…") has diverged
 from every other branch's real work** — its merge-base with `main`/the harness lineage is `10c156f`
@@ -88,17 +97,27 @@ fast-forward or reset `origin/dev` to the real lineage, or formally merge these 
 Flagging clearly rather than quietly rewriting a shared branch.
 
 ## Immediate priorities
-1. **Founder: `origin/dev` needs attention** — see the consolidation note above. Until it's fixed,
-   any future `agent/*` branch cut "from dev" will hit the same problem.
-2. Founder: interactively tap through the OTP flow on-device once (Simulator or physical iPhone) to
-   confirm the UI itself, not just the API — verified via direct API calls, not Simulator taps.
-3. Founder: review `docs/migrations/002_auth_tables.sql` (reviewed 2026-09-08 — safe, correct,
-   ready to run) and run it in the Supabase SQL Editor when ready — needed before `saved_stops`
-   persistence (in progress) can be exercised against a real signed-in user.
-4. Founder: merge the reviewed `agent/*` branches into a corrected `dev`, then `main`, when ready —
-   not done automatically per workflow rules (requires human approval).
+1. **Founder: run `docs/migrations/002_auth_tables.sql`** in the Supabase SQL Editor (final
+   review 2026-09-10: recommend RUN). Then `npm run rls:check` from `apps/mobile/` → expect 5/5,
+   and record the run here and in `docs/migrations/README.md`.
+2. Lead: once 5/5 — dispatch `mobile-verifier` for a Level 2 saved-stops pass (signed-in save →
+   Saved tab → sign out → sign back in), then plan reviews.
+3. Founder: tap through the OTP sign-in flow once on a Simulator or iPhone — verified via the live
+   API, never via the UI.
+4. Founder: decide when to push `agent/agent-os-v0.2` and integrate it into `dev` → `main`
+   (requires approval; the branch is local-only today).
 
 ## Log
+- **2026-09-10** — **Maintenance (Lead, pre-migration).** Confirmed with `git ls-remote` that
+  `origin/dev` is healthy (= local `dev` = `60749f0`, old divergent tip merged in); marked the
+  consolidation note resolved. Removed 8 finished worktrees (`auth-foundation`,
+  `auth-otp-foundation`, `db-auth-tables-verify`, `db-foundation`, `harness-pilot-a`,
+  `harness-pilot-taskB`, `qa-baseline`, `saved-stops-persistence`) after confirming each was merged
+  into `agent/agent-os-v0.2`, had no tracked or untracked changes, and held only disposable ignored
+  files (`node_modules`, `.expo/`, `.env` copies whose values match the main checkout's). All
+  branches kept; the `dev` worktree kept. Rewrote `docs/architecture/current-state.md`, which still
+  described auth and saved stops as unbuilt. Final read-only review of `002_auth_tables.sql`: no
+  blockers, recommend RUN. No app code or database changes.
 - **2026-09-10** — **Agent OS v0.2.** Replaced the manual multi-session model (separate Desktop
   chats named Orchestrator / DB Agent / Mobile Builder / QA, which could not actually
   communicate) with one **HerStop Lead** session that dispatches project subagents. New roster:
