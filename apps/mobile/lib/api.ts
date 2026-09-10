@@ -55,7 +55,10 @@ function mockToStop(mock: (typeof MOCK_STOPS)[number]): Stop {
 
 /** Fetch all stops. Queries Supabase; falls back to mock data on error/empty. */
 export async function getStops(): Promise<StopData[]> {
-  if (!supabaseConfigured) return MOCK_STOPS;
+  if (!supabaseConfigured) {
+    if (__DEV__) console.log('[getStops] MOCK fallback (reason: supabase not configured)');
+    return MOCK_STOPS;
+  }
   try {
     const { data, error } = await supabase
       .from('stops')
@@ -63,16 +66,23 @@ export async function getStops(): Promise<StopData[]> {
       .order('rating', { ascending: false });
 
     if (error) throw error;
-    if (data && data.length > 0) return (data as Stop[]).map(dbToStopData);
+    if (data && data.length > 0) {
+      if (__DEV__) console.log(`[getStops] LIVE Supabase: ${data.length} rows`);
+      return (data as Stop[]).map(dbToStopData);
+    }
+    if (__DEV__) console.log('[getStops] MOCK fallback (reason: live query returned 0 rows)');
   } catch (e) {
-    console.warn('[getStops] Supabase failed, using mock data:', e);
+    if (__DEV__) console.warn('[getStops] MOCK fallback (reason: Supabase error)', e);
   }
   return MOCK_STOPS;
 }
 
 /** Fetch a single stop by id. */
 export async function getStopById(id: string): Promise<StopData | null> {
-  if (!supabaseConfigured) return MOCK_STOPS.find((s) => s.id === id) ?? null;
+  if (!supabaseConfigured) {
+    if (__DEV__) console.log(`[getStopById] MOCK fallback (reason: supabase not configured) id=${id}`);
+    return MOCK_STOPS.find((s) => s.id === id) ?? null;
+  }
   try {
     const { data, error } = await supabase
       .from('stops')
@@ -81,9 +91,12 @@ export async function getStopById(id: string): Promise<StopData | null> {
       .single();
 
     if (error) throw error;
-    if (data) return dbToStopData(data as Stop);
+    if (data) {
+      if (__DEV__) console.log(`[getStopById] LIVE Supabase: id=${id}`);
+      return dbToStopData(data as Stop);
+    }
   } catch (e) {
-    console.warn('[getStopById] Supabase failed, using mock data:', e);
+    if (__DEV__) console.warn(`[getStopById] MOCK fallback (reason: Supabase error) id=${id}`, e);
   }
   return MOCK_STOPS.find((s) => s.id === id) ?? null;
 }
