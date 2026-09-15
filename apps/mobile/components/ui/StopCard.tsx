@@ -1,25 +1,31 @@
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { IconSymbol } from './icon-symbol';
+import { ScoreBadge } from './ScoreBadge';
 import { Colors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useSavedStops } from '@/contexts/saved-stops';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { StopData } from '@/data/mock-stops';
+import { reviewCountLabel, scoreStop } from '@/lib/scoring';
+import type { ReviewStats } from '@/lib/types';
 
 export type { StopData };
 
 interface StopCardProps {
   stop: StopData;
+  /** This stop's aggregate review stats. Omit (or undefined) shows Limited Data,
+   * which is what a screen that hasn't fetched stats yet should pass. */
+  stats?: ReviewStats;
   onPress?: () => void;
 }
 
-export function StopCard({ stop, onPress }: StopCardProps) {
+export function StopCard({ stop, stats, onPress }: StopCardProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const { isSaved, toggleSaved } = useSavedStops();
   const bookmarked = isSaved(stop.id);
 
-  const isRecommended = stop.badge === 'recommended';
+  const { label } = scoreStop(stats);
 
   return (
     <TouchableOpacity testID={`stop-card-${stop.id}`} activeOpacity={0.95} onPress={onPress}>
@@ -44,23 +50,11 @@ export function StopCard({ stop, onPress }: StopCardProps) {
 
         {/* Content */}
         <View style={styles.content}>
-          {/* Badge + distance */}
+          {/* Badge + review count */}
           <View style={styles.metaRow}>
-            <View
-              style={[
-                styles.badge,
-                { backgroundColor: isRecommended ? colors.tintLight : colors.surfaceAlt },
-              ]}>
-              <Text
-                style={[
-                  styles.badgeText,
-                  { color: isRecommended ? colors.tint : colors.secondaryText },
-                ]}>
-                {isRecommended ? 'RECOMMENDED STOP' : 'GOOD OPTION'}
-              </Text>
-            </View>
-            <Text style={[styles.distance, { color: colors.secondaryText }]}>
-              {stop.distance}
+            <ScoreBadge label={label} />
+            <Text style={[styles.reviewLine, { color: colors.secondaryText }]}>
+              {reviewCountLabel(stats?.review_count ?? 0)}
             </Text>
           </View>
 
@@ -116,18 +110,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  badge: {
-    paddingVertical: Spacing.xs,
-    paddingHorizontal: Spacing.smd,
-    borderRadius: Radius.full,
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: '700' as const,
-    letterSpacing: 0.6,
-    lineHeight: 14,
-  },
-  distance: {
+  reviewLine: {
     ...Typography.caption,
   },
   title: {
