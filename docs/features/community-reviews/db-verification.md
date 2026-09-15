@@ -30,9 +30,12 @@ select tableowner from pg_tables where schemaname = 'public' and tablename = 're
 -- Expected: false.
 select relforcerowsecurity from pg_class where relname = 'reviews';
 
--- (d) Exactly the four policies 002 created, nothing unexpected added since.
+-- (d) Exactly the five policies 002 created, nothing unexpected added since
+-- (002 created FIVE, not four — the public-read policy 003 is about to
+-- drop is still here pre-apply).
 select policyname, cmd from pg_policies where tablename = 'reviews' order by policyname;
--- Expected 4 rows:
+-- Expected 5 rows, pre-apply:
+--   "Anyone can read visible reviews"                          | SELECT
 --   "Authenticated users can write their own review"          | INSERT
 --   "Authors can delete their own review"                     | DELETE
 --   "Authors can edit their own review"                       | UPDATE
@@ -68,7 +71,8 @@ having count(*) > 1;
 4. Run the post-apply checks below.
 5. Note the run in `docs/agent-os/STATUS.md` and update the migration's status in
    `docs/migrations/README.md` to "applied".
-6. **Do not run `004_seed_real_stops_i65.sql` yet — it does not exist.** See §7.
+6. `docs/migrations/004_seed_real_stops_i65.sql` (seeds 18 real stops, replacing the fictional
+   ones) is ready and depends on 003 — apply order is **003, then 004**. See §7.
 
 ## 3. Post-apply checks
 
@@ -86,10 +90,14 @@ npm run rls:check
 select conname from pg_constraint
 where conrelid = 'public.reviews'::regclass and conname = 'reviews_user_id_stop_id_key';
 
--- Confirms the old public-read policy on reviews is GONE — this should return
--- exactly the 4 policies listed in §1(d) above, and NOT
--- "Anyone can read visible reviews".
-select policyname from pg_policies where tablename = 'reviews' order by policyname;
+-- Confirms the old public-read policy on reviews is GONE. Expected 4 rows,
+-- post-apply — NOT the 5 from §1(d) (pre-apply) — and specifically no
+-- "Anyone can read visible reviews":
+--   "Authenticated users can write their own review"          | INSERT
+--   "Authors can delete their own review"                     | DELETE
+--   "Authors can edit their own review"                       | UPDATE
+--   "Authors can read their own review even if hidden"        | SELECT
+select policyname, cmd from pg_policies where tablename = 'reviews' order by policyname;
 
 -- Confirms the new tables all have RLS on.
 select relname, relrowsecurity from pg_class
@@ -114,29 +122,20 @@ table is dropped here and its data is not recoverable afterward.
 Block A is always safe to run and fully reverses everything 003 added *except* the public-read
 policy on `reviews`:
 
+**Order matters here** (fixed after the second security review, 2026-09-15 — the original draft
+of this rollback dropped `banned_users`/`is_banned()` before restoring the policies that
+reference them, which fails: `create policy … with check (… and not is_banned(auth.uid()))`
+creates a real dependency from the policy to the function, so Postgres refuses to drop a function
+a live policy still calls. Restoring the policies first removes that dependency, so everything
+below it can drop cleanly):
+
 ```sql
 begin;
 
--- Functions and their trigger first — nothing else depends on them.
-drop trigger if exists reviews_enforce_invariants_trigger on reviews;
-drop function if exists reviews_enforce_invariants();
-drop function if exists get_stop_reviews(text);
-drop function if exists get_stop_review_stats(text[]);
-drop function if exists report_review(uuid, text, text);
-drop function if exists hide_review(uuid);
-drop function if exists review_publish_delay();
-
--- New tables. `if exists` is safe here because all three are 003-only
--- additions with no other object depending on them except the functions
--- already dropped above.
-drop table if exists review_reports;
-drop table if exists hidden_reviews;
-drop table if exists banned_users;
-
--- Reviews: drop the new constraint, restore 002's insert/update/delete
--- policies to their unconditional (no banned_users / is_hidden-lock) form.
-alter table reviews drop constraint if exists reviews_user_id_stop_id_key;
-
+-- Policies FIRST. Restoring these to 002's unconditional form (no
+-- is_banned()/banned_users reference, no is_hidden-on-delete lock) removes
+-- the only thing that depends on is_banned() and banned_users, so they can
+-- be dropped further down without error.
 drop policy if exists "Authenticated users can write their own review" on reviews;
 create policy "Authenticated users can write their own review"
   on reviews for insert
@@ -153,8 +152,30 @@ create policy "Authors can delete their own review"
   on reviews for delete
   using (auth.uid() = user_id);
 
+-- Functions and their trigger next — nothing left depends on them now.
+drop trigger if exists reviews_enforce_invariants_trigger on reviews;
+drop function if exists reviews_enforce_invariants();
+drop function if exists get_stop_reviews(text);
+drop function if exists get_stop_review_stats(text[]);
+drop function if exists report_review(uuid, text, text);
+drop function if exists hide_review(uuid);
+drop function if exists is_banned(uuid);
+drop function if exists review_publish_delay();
+
+-- New tables — safe now that nothing references them.
+drop table if exists review_reports;
+drop table if exists hidden_reviews;
+drop table if exists banned_users;
+
+-- Reviews: drop the new constraint.
+alter table reviews drop constraint if exists reviews_user_id_stop_id_key;
+
 commit;
 ```
+
+This whole block has been re-read top to bottom to confirm it runs as one transaction with no
+forward references: policies restored before the functions/tables they used to depend on are
+dropped, and nothing later in the block depends on anything dropped earlier in it.
 
 Block B — **only run this if `reviews` still contains nothing but test data.** Once real traveler
 reviews exist, recreating the old public-read policy republishes every review (including ones a
@@ -219,6 +240,51 @@ migration file:
 No other deviations from `docs/features/community-reviews/spec.md` §1: function signatures,
 column names/types, and grant lists otherwise match the spec exactly.
 
+## 5b. Second security review (2026-09-15, verdict RUN AFTER FIXES) — four blocking findings
+
+All four fixed in place in the migration file; none changed a function signature or table shape.
+
+1. **Banned-user write block never fired (fail open).** The insert/update policies' inline
+   `select 1 from banned_users where user_id = auth.uid()` always saw zero rows: RLS applies to
+   every table a policy expression touches, evaluated as the *invoking* role (`authenticated`),
+   and `banned_users` has RLS on with zero policies — so a banned user's own write always passed
+   the check. Fixed with a new `security definer` helper, `is_banned(p_user_id uuid)` (bypasses
+   RLS the same way `get_stop_reviews` does, returns only a boolean, revoked from public/anon,
+   granted to authenticated), called as `not is_banned(auth.uid())` from both policies.
+2. **Publish delay was a minute-precision timestamp oracle.** Comparing against
+   `now() - review_publish_delay()` moved the visibility boundary every minute; polling
+   `get_stop_review_stats` (up to 200 stop ids per anon call) around a review's 24h mark could
+   narrow its `created_at` to roughly a minute, defeating the month-precision the migration was
+   designed around. Fixed by comparing against `date_trunc('day', now() - review_publish_delay())`
+   in both `get_stop_reviews` and `get_stop_review_stats` — the boundary now only moves once every
+   24h, so a whole day's worth of newly-published reviews cross it together and polling can't
+   isolate one.
+3. **Invariant-lock trigger gated on a deprecated, fail-open check.** `auth.role() = 'authenticated'`
+   reads a JWT claim and silently returns null (condition false, trigger does nothing) if that
+   claim is ever missing or shaped differently than expected — which would silently reopen forged
+   `created_at`, un-hiding, and `stop_id`/`user_id` re-pointing. Fixed by gating on
+   `current_user in ('authenticated', 'anon')` instead: `reviews_enforce_invariants` is
+   deliberately not `security definer`, so `current_user` is the actual Postgres role the
+   connection authenticated as — set by PostgREST/Supabase at the connection layer, not parsed
+   from a claim inside the function. The SQL Editor connects as `postgres`, matching neither, so
+   founder dashboard edits are still unaffected.
+4. **Rollback Block A aborted.** The original rollback dropped `banned_users`/`is_banned()` before
+   restoring the reviews policies that reference `is_banned()`, which Postgres refuses (a policy
+   expression creates a real dependency on any function it calls). Fixed by reordering §4's
+   Block A: policies restored first, then functions, then tables — see §4 above, now re-read top
+   to bottom to confirm it runs as one transaction with no forward references.
+
+Cheap fixes applied alongside: `set search_path = public, pg_temp` on every `security definer`
+function (was `set search_path = public`, missing `pg_temp`) and on `review_publish_delay()`
+(now pinned + `revoke execute … from public`, for consistency — nothing calls it directly, only
+the two `security definer` read functions internally); `report_review`/`hide_review` now apply
+the same visibility rule as `get_stop_reviews` (not-hidden, past the publish delay, author not
+banned) instead of checking only `is_hidden`, so they never accept a review id the read function
+would never actually show a client; `rls-check.mjs` assertions 5/6 now also assert the response
+contains no `user_id` key (AC7), and assertions 7/8 no longer print "migration not applied" when
+the real cause is a missing execute grant on an already-applied function (see that file's own
+comments for the gating logic).
+
 ## 6. Open questions / risks for the security reviewer
 
 - `banned_users` has zero client-facing surface by design (no policy, no function). If a future
@@ -230,11 +296,12 @@ column names/types, and grant lists otherwise match the spec exactly.
   before applying their own hand-written visibility filter — see pre-flight check (b)/(c) in §1.
   If the founder ever runs this migration as a different, lower-privileged role, confirm that
   role still bypasses RLS or these functions will silently under-return rows instead of erroring.
-- The `reviews_enforce_invariants` trigger and the banned-user write policies both key off
-  `auth.role() = 'authenticated'` / RLS applying only to non-owner roles respectively. Any future
-  moderation tooling that writes to `reviews` using a different, more-privileged Supabase role
-  would bypass both — intended (moderation code should be able to hide/unhide, ban/unban) but
-  worth confirming once a real moderation path exists beyond the dashboard.
+- The `reviews_enforce_invariants` trigger keys off `current_user in ('authenticated', 'anon')`;
+  the banned-user write check keys off `is_banned()` only being satisfiable through RLS (which
+  doesn't apply to a table's owner role at all). Any future moderation tooling that writes to
+  `reviews` using a different, more-privileged Supabase role would bypass both — intended
+  (moderation code should be able to hide/unhide, ban/unban) but worth confirming once a real
+  moderation path exists beyond the dashboard.
 - `review_reports` has zero SELECT policy, so there is currently no way — app-side or even via the
   founder's own signed-in session — to read reports back except the Supabase dashboard's table
   editor. Intentional for v1 (no moderation UI exists yet) but worth flagging so it isn't mistaken
@@ -246,26 +313,121 @@ column names/types, and grant lists otherwise match the spec exactly.
   live would violate the "never edit an applied migration" rule in `docs/migrations/README.md`
   and would need a `005` instead.
 
-## 7. Part 2 — seed real stops (004) — NOT COMPLETED
+## 7. Part 2 — seed real stops (004)
 
-Task instructions pointed at a scratch folder
-(`/private/tmp/claude-501/-Users-adityadas-herstop/6cadce63-358f-45fa-bd3c-4b0738c13058/scratchpad/beta-stops/`)
-expected to contain `beta-stops.json` and `provenance.json` (OpenStreetMap/Nominatim-derived
-data for 16 real I-65 stops between West Lafayette and Indianapolis). That folder exists but is
-**empty** — confirmed 2026-09-15, and a full search of `/private/tmp/claude-501` found no copy of
-either file anywhere on the machine.
+Migration: `docs/migrations/004_seed_real_stops_i65.sql` — **proposed, not applied.** Depends on
+003 being applied first (see the migration file's own header comment for why — reviews behaving
+sanely, not a hard technical requirement).
 
-Per the task's own instruction ("If that scratch folder is gone, STOP Part 2 and say so in your
-report — do not invent stop data"), Part 2 was not attempted:
+An earlier attempt at this (2026-09-15) was stopped: the scratch folder the original task pointed
+at (`/private/tmp/claude-501/.../scratchpad/beta-stops/`) was empty, and per that task's own
+instruction ("do not invent stop data") nothing was created. The dataset has since been rebuilt
+and committed to the repo proper at
+`docs/data/osm-i65-west-lafayette-indianapolis/` (`beta-stops.json`, `provenance.json`,
+`README.md`) — 18 real stops, OpenStreetMap + Nominatim, `osm-way-229125508` (Lebanon Rest Area)
+already excluded. 004 was written directly from that committed data; nothing was copied or
+re-derived.
 
-- `docs/migrations/004_seed_real_stops_i65.sql` — **not created.**
-- `docs/data/osm-i65-west-lafayette-indianapolis/` — **not created.**
-- The fictional test rows (`stops` ids `'1'`–`'6'`, including "Willow Creek Plaza TEST") are
-  **still live** — nothing was deleted, since 004 never ran.
+### Pre-flight (founder, before running 004)
 
-**To finish this later:** re-run the OpenStreetMap + Nominatim extraction that produced
-`beta-stops.json`/`provenance.json` (16 stops, ODbL-licensed, "© OpenStreetMap contributors"
-attribution required), excluding `osm-way-229125508` (Lebanon Rest Area — tagged
-`landuse=construction` + `toilets=no`), and hand the two files to db-engineer again with the same
-instructions. No SQL, schema, or app-code work is blocked by this — Part 1 (003) stands on its
-own and does not depend on 004.
+Read-only anon-key probe run 2026-09-15 against the live project, confirming the fictional rows
+004 deletes are exactly the ones expected:
+
+```
+GET {url}/rest/v1/stops?select=id,name&order=id
+→ HTTP 200:
+  [{"id":"1","name":"Willow Creek Plaza TEST"}, {"id":"2","name":"The Atlas Point"},
+   {"id":"3","name":"Meridian Transit Hub"}, {"id":"4","name":"Cedar Falls Rest Area"},
+   {"id":"5","name":"Sunrise Travel Center"}, {"id":"6","name":"Harbor View Stop"}]
+```
+
+Six rows, ids `'1'`–`'6'`, including "Willow Creek Plaza TEST" — matches what 004's `delete`
+targets. If the founder's own check of this endpoint (or the Table Editor) shows anything
+different — a 7th row, a different id set, or id `'1'` no longer marked TEST — **stop and
+re-confirm which rows are actually fictional before running 004**; the migration's `delete`
+statement only ever touches this exact id list, so it can't accidentally remove a real stop, but
+it also won't remove a fictional row that isn't on the list.
+
+### Apply (founder action, Supabase SQL Editor)
+
+1. Confirm 003 has already been applied (`docs/migrations/README.md` status column).
+2. Read `docs/migrations/004_seed_real_stops_i65.sql` top to bottom.
+3. Paste and run. Wrapped in its own `begin … commit`; the delete targets a fixed id list and the
+   insert is `on conflict (id) do update set …`, so re-running the whole file is safe.
+4. Run the verify checks below.
+5. Note the run in `docs/agent-os/STATUS.md`; update `docs/migrations/README.md` to "applied".
+
+### Verify (founder action)
+
+From `apps/mobile/`:
+
+```bash
+npm run supabase:check
+```
+
+Should show **18 rows** in `stops`, and no row named with a "TEST" marker. Also spot-check in the
+SQL Editor:
+
+```sql
+select count(*) from stops;                              -- expect 18
+select id, name from stops where name ilike '%test%';    -- expect 0 rows
+select count(*) from stops where categories = '{}';      -- expect 4 (the travel-centre rows)
+```
+
+`npm run rls:check` is unaffected by 004 (it doesn't probe `stops` row *content*, only that anon
+SELECT on `stops` succeeds at all — assertion 1/2 in `rls-check.mjs` — which is unchanged either
+way).
+
+### Rollback — development-only
+
+```sql
+begin;
+
+delete from stops
+where id in (
+  'osm-way-1365688111', 'osm-way-571837327', 'osm-way-283289437', 'osm-node-12688099567',
+  'osm-way-1195033424', 'osm-way-1196146349', 'osm-node-7759210731', 'osm-way-230775623',
+  'osm-node-11182191149', 'osm-way-1545554017', 'osm-way-225347315', 'osm-way-223165641',
+  'osm-way-766083124', 'osm-way-1026315492', 'osm-node-12687832610', 'osm-way-220710454',
+  'osm-way-951355881', 'osm-way-432174373'
+);
+
+-- Re-inserts the original fictional rows exactly as docs/schema.sql seeded them, so the app has
+-- *some* stops again while iterating locally.
+insert into stops (id, name, address, latitude, longitude, badge, categories, tags, rating, review_count, image_color)
+values
+  ('1', 'Willow Creek Plaza', '1420 Willow Creek Rd, Exit 42', 40.5642, -74.2891, 'recommended',
+   '{"Gas","Restroom","Well Lit"}',
+   '[{"label":"Well Lit","icon":"lightbulb.fill"},{"label":"Clean Restroom","icon":"sparkles"}]',
+   4.6, 128, '#C9B8A8'),
+  ('2', 'The Atlas Point', '780 Route 1 South, Woodbridge', 40.5573, -74.2846, 'good',
+   '{"Gas","Open Now"}',
+   '[{"label":"Staffed 24/7","icon":"person.fill"},{"label":"CCTV Monitored","icon":"video.fill"}]',
+   3.9, 42, '#B8A898'),
+  ('3', 'Meridian Transit Hub', '55 Meridian Blvd, Newark', 40.7357, -74.1724, 'recommended',
+   '{"Well Lit","Open Now"}',
+   '[{"label":"Safety Help Point","icon":"shield.fill"},{"label":"High Visibility","icon":"lightbulb.fill"}]',
+   4.4, 87, '#8B9DAF'),
+  ('4', 'Cedar Falls Rest Area', 'I-78 West, Mile Marker 34', 40.6684, -74.6851, 'recommended',
+   '{"Restroom","Well Lit"}',
+   '[{"label":"Clean Restroom","icon":"sparkles"},{"label":"Well Lit","icon":"lightbulb.fill"},{"label":"CCTV Monitored","icon":"video.fill"}]',
+   4.2, 63, '#A8B5A3'),
+  ('5', 'Sunrise Travel Center', '2200 US-9, Old Bridge', 40.3987, -74.2654, 'recommended',
+   '{"Gas","Restroom","Open Now","Well Lit"}',
+   '[{"label":"Well Lit","icon":"lightbulb.fill"},{"label":"Clean Restroom","icon":"sparkles"},{"label":"Staffed 24/7","icon":"person.fill"}]',
+   4.8, 214, '#D4C1A8'),
+  ('6', 'Harbor View Stop', '410 Harbor Blvd, Perth Amboy', 40.5093, -74.2652, 'good',
+   '{"Open Now"}',
+   '[{"label":"CCTV Monitored","icon":"video.fill"}]',
+   3.5, 18, '#9BADB8')
+on conflict (id) do nothing;
+
+commit;
+```
+
+**This rollback is development-only.** It re-seeds fictional/placeholder data (row `'1'` comes
+back as "Willow Creek Plaza", matching `docs/schema.sql`'s original seed exactly — not
+"... TEST", which is whatever the live row happened to be renamed to after that file was first
+applied) — never run it against a project real travelers are using; any `saved_stops`/`reviews`
+rows created against the 18 real stops in the meantime would cascade-delete along with them,
+which is real user data loss, not a test-data cleanup.
