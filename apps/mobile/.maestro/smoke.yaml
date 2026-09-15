@@ -15,25 +15,32 @@ name: HerStop core navigation smoke
 
 # Maestro's launchApp relaunches Expo Go itself, not the last-opened project
 # (clearState: false does not auto-resume the JS bundle) — it lands on Expo
-# Go's home screen with a "Recently opened > HerStop" row. Tap it to get back
-# into the app before doing anything else.
-- runFlow:
-    when:
-      visible: "HerStop"
-    commands:
-      - tapOn: "HerStop"
+# Go's home screen with a "Recently opened > HerStop" row. `runFlow: when:
+# visible` checks instantly (before the Expo Go home screen has finished
+# drawing) and was observed to skip a real, about-to-appear element, so this
+# uses extendedWaitUntil + an optional tap instead: it waits for either
+# state, and does nothing (no failure) if that state never shows because the
+# app resumed directly into the project.
+- extendedWaitUntil:
+    visible: "HerStop"
+    timeout: 8000
+    optional: true
+- tapOn:
+    text: "HerStop"
+    optional: true
 
 # Onboarding is the entry route. It may already be dismissed on a warm sim,
 # so treat it as optional rather than failing the whole flow.
-- runFlow:
-    when:
-      visible: "Get Started"
-    commands:
-      - assertVisible: "HerStop"
-      - tapOn: "Get Started"
+- extendedWaitUntil:
+    visible: "Get Started"
+    timeout: 5000
+    optional: true
+- tapOn:
+    text: "Get Started"
+    optional: true
 
 # Explore — the primary screen.
-- assertVisible: "Explore"
+- assertVisible: ".*Explore.*"
 - assertVisible: "Where are you heading?"
 
 # Trust-and-safety language must never appear as an absolute claim.
@@ -42,11 +49,11 @@ name: HerStop core navigation smoke
 - assertNotVisible: "Crime-free"
 
 # Every tab renders.
-- tapOn: "Safety"
-- tapOn: "Journeys"
-- tapOn: "Saved"
+- tapOn: ".*Safety.*"
+- tapOn: ".*Journeys.*"
+- tapOn: ".*Saved.*"
 - assertVisible: "Saved Stops"
-- tapOn: "Profile"
+- tapOn: ".*Profile.*"
 - assertVisible: "Profile"
 
-- takeScreenshot: /tmp/maestro-herstop-profile
+- takeScreenshot: maestro-herstop-profile

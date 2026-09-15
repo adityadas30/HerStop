@@ -18,5 +18,5 @@ name: HerStop verify an OTP email code
 - inputText: ${OTP}
 - assertVisible: "Verify"
 - tapOn: "Verify"
-- assertVisible: "Signed in as"
-- takeScreenshot: /tmp/maestro-herstop-signed-in
+- assertVisible: "Signed in as .*"
+- takeScreenshot: maestro-herstop-signed-in

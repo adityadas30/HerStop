@@ -16,19 +16,26 @@ name: HerStop request an OTP email code
 
 # Maestro's launchApp relaunches Expo Go itself, not the last-opened project
 # — it lands on Expo Go's home screen with a "Recently opened > HerStop" row.
-- runFlow:
-    when:
-      visible: "HerStop"
-    commands:
-      - tapOn: "HerStop"
+# See smoke.yaml for why this uses extendedWaitUntil + optional tapOn rather
+# than `runFlow: when: visible` (that pattern raced ahead of the Expo Go home
+# screen actually rendering and silently skipped a real element).
+- extendedWaitUntil:
+    visible: "HerStop"
+    timeout: 8000
+    optional: true
+- tapOn:
+    text: "HerStop"
+    optional: true
 
-- runFlow:
-    when:
-      visible: "Get Started"
-    commands:
-      - tapOn: "Get Started"
+- extendedWaitUntil:
+    visible: "Get Started"
+    timeout: 5000
+    optional: true
+- tapOn:
+    text: "Get Started"
+    optional: true
 
-- tapOn: "Profile"
+- tapOn: ".*Profile.*"
 - assertVisible: "Profile"
 
 # Guard: if a previous run left this screen signed in or already on the
@@ -39,4 +46,4 @@ name: HerStop request an OTP email code
 - inputText: ${EMAIL}
 - tapOn: "Send code"
 - assertVisible: "Enter the code sent to your email"
-- takeScreenshot: /tmp/maestro-herstop-otp-request
+- takeScreenshot: maestro-herstop-otp-request
