@@ -1,0 +1,22 @@
+# HerStop — enter the OTP code and verify sign-in.
+#
+# Phase A2. Intentionally has NO launchApp: it continues the app state left
+# behind by `auth-request-code.yaml` (Profile screen, "enter-code" step).
+# Relaunching here would remount the Profile screen, lose the in-memory step,
+# and force a second "Send code" tap, which invalidates the code already
+# requested. Only run this immediately after auth-request-code.yaml, with
+# nothing in between that force-quits or reboots the app/simulator.
+#
+# Run with: maestro test --device <UDID> -e OTP=12345678 auth-enter-code.yaml
+appId: host.exp.Exponent
+name: HerStop verify an OTP email code
+---
+- assertVisible: "Enter the code sent to your email"
+
+- tapOn:
+    id: "otp-code-input"
+- inputText: ${OTP}
+- assertVisible: "Verify"
+- tapOn: "Verify"
+- assertVisible: "Signed in as"
+- takeScreenshot: /tmp/maestro-herstop-signed-in
