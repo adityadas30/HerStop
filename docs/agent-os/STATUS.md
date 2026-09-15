@@ -115,6 +115,15 @@ Flagging clearly rather than quietly rewriting a shared branch.
    approval; the branch is backed up on origin but not merged).
 
 ## Log
+- **2026-09-15** — Sprint resumed after a multi-day gap. On 09-11 three agents (reviews builder,
+  db-engineer, Maestro QA) died together to an infrastructure stall, not to code: the reviews
+  builder's partial `lib/scoring.ts` + `lib/types.ts` survived in its worktree, the QA agent's
+  Maestro flows were recovered and committed (`78d982a`), and the db-engineer's worktree was
+  auto-cleaned with nothing to salvage. All three restarted. Merged before the stall: Coming Soon
+  previews for Safety/Journeys/JourneyShield (JourneyShield's fake "Active Monitoring" switch is
+  gone) + TestFlight config (bundle id `com.adityadas.herstop`, `eas.json`, `docs/release/testflight.md`).
+  Still open: 003 security fixes, 004 real-stop seed (both need a founder run), reviews app side,
+  signed-in QA (needs an OTP code from the founder).
 - **2026-09-10** — **Ship sprint start.** Founder applied migration 002; Lead re-ran `rls:check`
   5/5. `mobile-verifier` (fresh context) on saved stops: tsc ✅ lint ✅ supabase:check ✅
   rls:check ✅ `expo export ios` ✅; guest browsing / guest Saved invitation ✅ (screenshots);
