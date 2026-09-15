@@ -9,7 +9,8 @@ import { JourneyShield } from '@/components/ui/JourneyShield';
 import { StopCard } from '@/components/ui/StopCard';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 import { FILTERS, MOCK_STOPS, type StopData } from '@/data/mock-stops';
-import { getStops } from '@/lib/api';
+import { getStopReviewStats, getStops } from '@/lib/api';
+import type { ReviewStats } from '@/lib/types';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function DiscoverScreen() {
@@ -19,11 +20,18 @@ export default function DiscoverScreen() {
   const router = useRouter();
 
   const [stops, setStops] = useState<StopData[]>(MOCK_STOPS);
+  const [stats, setStats] = useState<Map<string, ReviewStats>>(new Map());
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilters, setSelectedFilters] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    getStops().then(setStops);
+    getStops().then((loadedStops) => {
+      setStops(loadedStops);
+      // One call for every loaded stop's stats, not one call per stop.
+      getStopReviewStats(loadedStops.map((s) => s.id)).then(({ stats: loadedStats }) => {
+        setStats(loadedStats);
+      });
+    });
   }, []);
 
   function toggleFilter(label: string) {
@@ -120,7 +128,7 @@ export default function DiscoverScreen() {
           </Text>
           <Text style={[styles.sectionSubtitle, { color: colors.secondaryText }]}>
             {filteredStops.length === stops.length
-              ? 'Better-reviewed stops within 5 miles'
+              ? 'Browse stops and recent traveler feedback'
               : `${filteredStops.length} stop${filteredStops.length !== 1 ? 's' : ''} found`}
           </Text>
         </View>
@@ -132,6 +140,7 @@ export default function DiscoverScreen() {
               <StopCard
                 key={stop.id}
                 stop={stop}
+                stats={stats.get(stop.id)}
                 onPress={() => router.push(`/stop/${stop.id}`)}
               />
             ))}

@@ -24,6 +24,10 @@ export default function RootLayout() {
               name="stop/[id]"
               options={{ title: 'Stop Details', headerBackTitle: 'Back' }}
             />
+            <Stack.Screen
+              name="review/[stopId]"
+              options={{ presentation: 'modal', title: 'Write a Review' }}
+            />
           </Stack>
           <StatusBar style="auto" />
         </SavedStopsProvider>
