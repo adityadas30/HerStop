@@ -1,0 +1,31 @@
+# HerStop — Saved tab shows the guest sign-in invitation when signed out.
+#
+# clearState: true is deliberate here: this flow verifies the signed-out
+# empty state, so it needs a clean session rather than whatever the previous
+# flow left behind.
+#
+# Run with: maestro test --device <UDID> saved-tab.yaml
+appId: host.exp.Exponent
+name: HerStop Saved tab guest invitation
+---
+- launchApp:
+    clearState: true
+
+- runFlow:
+    when:
+      visible: "HerStop"
+    commands:
+      - tapOn: "HerStop"
+
+- runFlow:
+    when:
+      visible: "Get Started"
+    commands:
+      - tapOn: "Get Started"
+
+- tapOn: "Saved"
+- assertVisible: "Saved Stops"
+- assertVisible: "Save stops for later"
+- assertVisible: "Sign in"
+- assertNotVisible: "Verified safe"
+- takeScreenshot: /tmp/maestro-herstop-saved-guest

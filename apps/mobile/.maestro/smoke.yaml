@@ -1,10 +1,8 @@
 # HerStop — core navigation smoke flow (Level 3).
 #
-# STATUS: staged, not yet runnable. Maestro is not installed on this machine;
-# installing it is a founder decision. Written against the real screens as of
-# 2026-09-10 so it runs unchanged once `maestro` is on PATH:
+# Written against the real screens as of 2026-09-10.
 #
-#   maestro test apps/mobile/.maestro/smoke.yaml
+#   maestro test --device <UDID> apps/mobile/.maestro/smoke.yaml
 #
 # appId is Expo Go, because the app has no ios.bundleIdentifier yet and runs
 # through `npx expo start --ios`. Switch to the real bundle id once a dev client
@@ -14,6 +12,16 @@ name: HerStop core navigation smoke
 ---
 - launchApp:
     clearState: false
+
+# Maestro's launchApp relaunches Expo Go itself, not the last-opened project
+# (clearState: false does not auto-resume the JS bundle) — it lands on Expo
+# Go's home screen with a "Recently opened > HerStop" row. Tap it to get back
+# into the app before doing anything else.
+- runFlow:
+    when:
+      visible: "HerStop"
+    commands:
+      - tapOn: "HerStop"
 
 # Onboarding is the entry route. It may already be dismissed on a warm sim,
 # so treat it as optional rather than failing the whole flow.
