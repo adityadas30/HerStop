@@ -30,9 +30,12 @@ select tableowner from pg_tables where schemaname = 'public' and tablename = 're
 -- Expected: false.
 select relforcerowsecurity from pg_class where relname = 'reviews';
 
--- (d) Exactly the four policies 002 created, nothing unexpected added since.
+-- (d) Exactly the five policies 002 created, nothing unexpected added since
+-- (002 created FIVE, not four — the public-read policy 003 is about to
+-- drop is still here pre-apply).
 select policyname, cmd from pg_policies where tablename = 'reviews' order by policyname;
--- Expected 4 rows:
+-- Expected 5 rows, pre-apply:
+--   "Anyone can read visible reviews"                          | SELECT
 --   "Authenticated users can write their own review"          | INSERT
 --   "Authors can delete their own review"                     | DELETE
 --   "Authors can edit their own review"                       | UPDATE
@@ -86,10 +89,14 @@ npm run rls:check
 select conname from pg_constraint
 where conrelid = 'public.reviews'::regclass and conname = 'reviews_user_id_stop_id_key';
 
--- Confirms the old public-read policy on reviews is GONE — this should return
--- exactly the 4 policies listed in §1(d) above, and NOT
--- "Anyone can read visible reviews".
-select policyname from pg_policies where tablename = 'reviews' order by policyname;
+-- Confirms the old public-read policy on reviews is GONE. Expected 4 rows,
+-- post-apply — NOT the 5 from §1(d) (pre-apply) — and specifically no
+-- "Anyone can read visible reviews":
+--   "Authenticated users can write their own review"          | INSERT
+--   "Authors can delete their own review"                     | DELETE
+--   "Authors can edit their own review"                       | UPDATE
+--   "Authors can read their own review even if hidden"        | SELECT
+select policyname, cmd from pg_policies where tablename = 'reviews' order by policyname;
 
 -- Confirms the new tables all have RLS on.
 select relname, relrowsecurity from pg_class
@@ -114,29 +121,20 @@ table is dropped here and its data is not recoverable afterward.
 Block A is always safe to run and fully reverses everything 003 added *except* the public-read
 policy on `reviews`:
 
+**Order matters here** (fixed after the second security review, 2026-09-15 — the original draft
+of this rollback dropped `banned_users`/`is_banned()` before restoring the policies that
+reference them, which fails: `create policy … with check (… and not is_banned(auth.uid()))`
+creates a real dependency from the policy to the function, so Postgres refuses to drop a function
+a live policy still calls. Restoring the policies first removes that dependency, so everything
+below it can drop cleanly):
+
 ```sql
 begin;
 
--- Functions and their trigger first — nothing else depends on them.
-drop trigger if exists reviews_enforce_invariants_trigger on reviews;
-drop function if exists reviews_enforce_invariants();
-drop function if exists get_stop_reviews(text);
-drop function if exists get_stop_review_stats(text[]);
-drop function if exists report_review(uuid, text, text);
-drop function if exists hide_review(uuid);
-drop function if exists review_publish_delay();
-
--- New tables. `if exists` is safe here because all three are 003-only
--- additions with no other object depending on them except the functions
--- already dropped above.
-drop table if exists review_reports;
-drop table if exists hidden_reviews;
-drop table if exists banned_users;
-
--- Reviews: drop the new constraint, restore 002's insert/update/delete
--- policies to their unconditional (no banned_users / is_hidden-lock) form.
-alter table reviews drop constraint if exists reviews_user_id_stop_id_key;
-
+-- Policies FIRST. Restoring these to 002's unconditional form (no
+-- is_banned()/banned_users reference, no is_hidden-on-delete lock) removes
+-- the only thing that depends on is_banned() and banned_users, so they can
+-- be dropped further down without error.
 drop policy if exists "Authenticated users can write their own review" on reviews;
 create policy "Authenticated users can write their own review"
   on reviews for insert
@@ -153,8 +151,30 @@ create policy "Authors can delete their own review"
   on reviews for delete
   using (auth.uid() = user_id);
 
+-- Functions and their trigger next — nothing left depends on them now.
+drop trigger if exists reviews_enforce_invariants_trigger on reviews;
+drop function if exists reviews_enforce_invariants();
+drop function if exists get_stop_reviews(text);
+drop function if exists get_stop_review_stats(text[]);
+drop function if exists report_review(uuid, text, text);
+drop function if exists hide_review(uuid);
+drop function if exists is_banned(uuid);
+drop function if exists review_publish_delay();
+
+-- New tables — safe now that nothing references them.
+drop table if exists review_reports;
+drop table if exists hidden_reviews;
+drop table if exists banned_users;
+
+-- Reviews: drop the new constraint.
+alter table reviews drop constraint if exists reviews_user_id_stop_id_key;
+
 commit;
 ```
+
+This whole block has been re-read top to bottom to confirm it runs as one transaction with no
+forward references: policies restored before the functions/tables they used to depend on are
+dropped, and nothing later in the block depends on anything dropped earlier in it.
 
 Block B — **only run this if `reviews` still contains nothing but test data.** Once real traveler
 reviews exist, recreating the old public-read policy republishes every review (including ones a
@@ -219,6 +239,51 @@ migration file:
 No other deviations from `docs/features/community-reviews/spec.md` §1: function signatures,
 column names/types, and grant lists otherwise match the spec exactly.
 
+## 5b. Second security review (2026-09-15, verdict RUN AFTER FIXES) — four blocking findings
+
+All four fixed in place in the migration file; none changed a function signature or table shape.
+
+1. **Banned-user write block never fired (fail open).** The insert/update policies' inline
+   `select 1 from banned_users where user_id = auth.uid()` always saw zero rows: RLS applies to
+   every table a policy expression touches, evaluated as the *invoking* role (`authenticated`),
+   and `banned_users` has RLS on with zero policies — so a banned user's own write always passed
+   the check. Fixed with a new `security definer` helper, `is_banned(p_user_id uuid)` (bypasses
+   RLS the same way `get_stop_reviews` does, returns only a boolean, revoked from public/anon,
+   granted to authenticated), called as `not is_banned(auth.uid())` from both policies.
+2. **Publish delay was a minute-precision timestamp oracle.** Comparing against
+   `now() - review_publish_delay()` moved the visibility boundary every minute; polling
+   `get_stop_review_stats` (up to 200 stop ids per anon call) around a review's 24h mark could
+   narrow its `created_at` to roughly a minute, defeating the month-precision the migration was
+   designed around. Fixed by comparing against `date_trunc('day', now() - review_publish_delay())`
+   in both `get_stop_reviews` and `get_stop_review_stats` — the boundary now only moves once every
+   24h, so a whole day's worth of newly-published reviews cross it together and polling can't
+   isolate one.
+3. **Invariant-lock trigger gated on a deprecated, fail-open check.** `auth.role() = 'authenticated'`
+   reads a JWT claim and silently returns null (condition false, trigger does nothing) if that
+   claim is ever missing or shaped differently than expected — which would silently reopen forged
+   `created_at`, un-hiding, and `stop_id`/`user_id` re-pointing. Fixed by gating on
+   `current_user in ('authenticated', 'anon')` instead: `reviews_enforce_invariants` is
+   deliberately not `security definer`, so `current_user` is the actual Postgres role the
+   connection authenticated as — set by PostgREST/Supabase at the connection layer, not parsed
+   from a claim inside the function. The SQL Editor connects as `postgres`, matching neither, so
+   founder dashboard edits are still unaffected.
+4. **Rollback Block A aborted.** The original rollback dropped `banned_users`/`is_banned()` before
+   restoring the reviews policies that reference `is_banned()`, which Postgres refuses (a policy
+   expression creates a real dependency on any function it calls). Fixed by reordering §4's
+   Block A: policies restored first, then functions, then tables — see §4 above, now re-read top
+   to bottom to confirm it runs as one transaction with no forward references.
+
+Cheap fixes applied alongside: `set search_path = public, pg_temp` on every `security definer`
+function (was `set search_path = public`, missing `pg_temp`) and on `review_publish_delay()`
+(now pinned + `revoke execute … from public`, for consistency — nothing calls it directly, only
+the two `security definer` read functions internally); `report_review`/`hide_review` now apply
+the same visibility rule as `get_stop_reviews` (not-hidden, past the publish delay, author not
+banned) instead of checking only `is_hidden`, so they never accept a review id the read function
+would never actually show a client; `rls-check.mjs` assertions 5/6 now also assert the response
+contains no `user_id` key (AC7), and assertions 7/8 no longer print "migration not applied" when
+the real cause is a missing execute grant on an already-applied function (see that file's own
+comments for the gating logic).
+
 ## 6. Open questions / risks for the security reviewer
 
 - `banned_users` has zero client-facing surface by design (no policy, no function). If a future
@@ -230,11 +295,12 @@ column names/types, and grant lists otherwise match the spec exactly.
   before applying their own hand-written visibility filter — see pre-flight check (b)/(c) in §1.
   If the founder ever runs this migration as a different, lower-privileged role, confirm that
   role still bypasses RLS or these functions will silently under-return rows instead of erroring.
-- The `reviews_enforce_invariants` trigger and the banned-user write policies both key off
-  `auth.role() = 'authenticated'` / RLS applying only to non-owner roles respectively. Any future
-  moderation tooling that writes to `reviews` using a different, more-privileged Supabase role
-  would bypass both — intended (moderation code should be able to hide/unhide, ban/unban) but
-  worth confirming once a real moderation path exists beyond the dashboard.
+- The `reviews_enforce_invariants` trigger keys off `current_user in ('authenticated', 'anon')`;
+  the banned-user write check keys off `is_banned()` only being satisfiable through RLS (which
+  doesn't apply to a table's owner role at all). Any future moderation tooling that writes to
+  `reviews` using a different, more-privileged Supabase role would bypass both — intended
+  (moderation code should be able to hide/unhide, ban/unban) but worth confirming once a real
+  moderation path exists beyond the dashboard.
 - `review_reports` has zero SELECT policy, so there is currently no way — app-side or even via the
   founder's own signed-in session — to read reports back except the Supabase dashboard's table
   editor. Intentional for v1 (no moderation UI exists yet) but worth flagging so it isn't mistaken
