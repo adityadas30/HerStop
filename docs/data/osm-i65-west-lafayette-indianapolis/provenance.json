@@ -1,0 +1,35 @@
+{
+  "retrieved_at": "2026-09-15T20:45:51Z",
+  "retrieved_at_source": "osm3s.timestamp_osm_base from the Overpass API response",
+  "corridor": {
+    "description": "West Lafayette, Indiana -> Indianapolis, Indiana along I-65",
+    "bbox_south_west_north_east": [39.80, -87.00, 40.47, -86.10]
+  },
+  "overpass_endpoint": "https://overpass-api.de/api/interpreter",
+  "overpass_user_agent": "HerStop-beta-dataset/0.1",
+  "overpass_query": "[out:json][timeout:90];\nway[\"highway\"=\"motorway\"][\"ref\"~\"I 65\"](39.80,-87.00,40.47,-86.10)->.i65;\n(\n  node(around.i65:1500)[\"amenity\"=\"fuel\"];\n  way(around.i65:1500)[\"amenity\"=\"fuel\"];\n  node(around.i65:1500)[\"highway\"=\"rest_area\"];\n  way(around.i65:1500)[\"highway\"=\"rest_area\"];\n  node(around.i65:1500)[\"highway\"=\"services\"];\n  way(around.i65:1500)[\"highway\"=\"services\"];\n  node(around.i65:1500)[\"amenity\"=\"truck_stop\"];\n  way(around.i65:1500)[\"amenity\"=\"truck_stop\"];\n);\nout center tags;",
+  "nominatim_endpoint": "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat={lat}&lon={lon}",
+  "nominatim_user_agent": "HerStop-beta-dataset/0.1",
+  "nominatim_rate_limit": "max 1 request/sec, enforced with a 1.1s sleep between calls",
+  "processing_steps": [
+    "1. Ran the Overpass query above to fetch I-65 motorway ways in the bbox, then fuel/rest_area/services/truck_stop features within ~1.5km of those ways (62 raw elements returned).",
+    "2. Dropped features with no real name or brand tag, and any tagged disused:*/abandoned:*/was:* (50 named candidates remained).",
+    "3. Hard-excluded osm-way-229125508 (Lebanon Rest Area - I65 SB) per founder decision: tagged landuse=construction and toilets=no.",
+    "4. De-duplicated features representing the same physical business (same name/brand within ~300m), keeping the record with the most complete tag set -- e.g. a fuel node inside a travel-centre way was dropped in favor of the more complete record (42 clusters remained).",
+    "5. Selected 18 of the 42 clusters for geographic spread across the full corridor and preference for interchange-area stops (multiple truck-stop/travel-centre chains: Love's x2, Flying J, TA).",
+    "6. For each selected stop, used addr:* OSM tags for the address when present; otherwise reverse-geocoded the stop's lat/lon via Nominatim (5 of 18 stops) and recorded address_source accordingly. Nominatim's own place name (e.g. it returned 'Pilot' near the Flying J Travel Center point) was never used -- only its address component fields (house_number, road, city/town/village, state, postcode). Name/brand always comes from the original OSM tags.",
+    "7. Mapped categories strictly from OSM tags per the app's existing category vocabulary (Gas, Restroom, Open Now, Well Lit in apps/mobile/data/mock-stops.ts): amenity=fuel -> 'Gas'; toilets=yes -> 'Restroom' (no stop in this dataset carries a toilets tag, so none received 'Restroom'). highway=rest_area/services has no equivalent category in the app vocabulary, so those 4 travel-centre stops were left with an empty categories array rather than inventing a category. opening_hours=24/7 was present on some stops but was not mapped to any category, since no '24-hour' category exists in the app vocabulary."
+  ],
+  "excluded": [
+    {
+      "id": "osm-way-229125508",
+      "name": "Lebanon Rest Area - I65 SB",
+      "reason": "Founder-directed exclusion; also tagged landuse=construction and toilets=no in OSM"
+    }
+  ],
+  "dropped_unnamed_or_lifecycle_tagged_count": 11,
+  "raw_overpass_element_count": 62,
+  "deduplicated_cluster_count": 42,
+  "final_stop_count": 18,
+  "nominatim_reverse_geocode_count": 5
+}
