@@ -3,8 +3,8 @@
 // (docs/migrations/002_auth_tables.sql: profiles, saved_stops, reviews;
 // docs/migrations/003_reviews_privacy_and_moderation.sql: the reviews
 // privacy/moderation follow-up — unique constraint, review_reports,
-// blocked_users, get_stop_reviews, get_stop_review_stats, report_review,
-// block_review_author).
+// hidden_reviews, banned_users, get_stop_reviews, get_stop_review_stats,
+// report_review, hide_review).
 //
 // Uses only the anon key — the same client the app uses, never a privileged
 // key. No secrets, tokens, or coordinates are ever printed.
@@ -14,16 +14,16 @@
 // assertion "anonymous INSERT into saved_stops is denied" targets a
 // stop_id/user_id that don't exist anywhere in the database (foreign keys
 // would stop it even if RLS didn't), and the 003 write-RPC probes
-// (report_review / block_review_author) use a fake review id, so nothing
-// real is ever created.
+// (report_review / hide_review) use a fake review id, so nothing real is
+// ever created.
 //
 // Safe to run before OR after either migration is applied:
 //   - Before 002: profiles/saved_stops/reviews don't exist yet, so those
 //     assertions FAIL with "table does not exist" — expected, not a crash.
 //   - After 002, before 003: the reviews-table assertions reflect 002's
 //     shape (public read still works); every 003 assertion (the RPCs,
-//     review_reports, blocked_users) FAILs with a clear "not applied yet"
-//     detail — expected, not a crash.
+//     review_reports, hidden_reviews, banned_users) FAILs with a clear
+//     "not applied yet" detail — expected, not a crash.
 //   - After 003: all assertions should PASS.
 //
 // Run: `npm run rls:check` from apps/mobile/.
@@ -222,10 +222,10 @@ await assert('anonymous calling report_review is rejected', async () => {
   return { pass: false, detail: `HTTP ${res.status} — expected 401/403: ${body.slice(0, 150)}` };
 });
 
-// 8. Anonymous calling block_review_author is rejected — same shape as 7.
-await assert('anonymous calling block_review_author is rejected', async () => {
+// 8. Anonymous calling hide_review is rejected — same shape as 7.
+await assert('anonymous calling hide_review is rejected', async () => {
   const fakeReviewId = '00000000-0000-0000-0000-000000000000';
-  const res = await fetch(`${url}/rest/v1/rpc/block_review_author`, {
+  const res = await fetch(`${url}/rest/v1/rpc/hide_review`, {
     method: 'POST',
     headers: { ...H, 'Content-Type': 'application/json' },
     body: JSON.stringify({ p_review_id: fakeReviewId }),
@@ -259,11 +259,12 @@ await assert('anonymous SELECT on review_reports returns 0 rows', async () => {
   return { pass: false, detail: `HTTP 200 but returned ${rows.length} row(s) — RLS is not restricting anon reads!` };
 });
 
-// 10. Anonymous SELECT on blocked_users returns 0 rows — the select policy
-//     is `auth.uid() = blocker_id`, and anon has no auth.uid(), so it's
-//     never true.
-await assert('anonymous SELECT on blocked_users returns 0 rows', async () => {
-  const res = await fetch(`${url}/rest/v1/blocked_users?select=blocker_id&limit=1`, { headers: H });
+// 10. Anonymous SELECT on hidden_reviews returns 0 rows — RLS is on with
+//     zero policies (same shape as review_reports in assertion 9), so
+//     every client role is denied at the row level, including a viewer
+//     trying to read their own hidden-review rows directly.
+await assert('anonymous SELECT on hidden_reviews returns 0 rows', async () => {
+  const res = await fetch(`${url}/rest/v1/hidden_reviews?select=review_id&limit=1`, { headers: H });
   if (res.status === 404) return { pass: false, detail: 'table does not exist yet — migration 003 not applied' };
   if (res.status === 401 || res.status === 403) {
     const body = await res.text().catch(() => '');
@@ -274,7 +275,27 @@ await assert('anonymous SELECT on blocked_users returns 0 rows', async () => {
     return { pass: false, detail: `HTTP ${res.status}: ${body.slice(0, 150)}` };
   }
   const rows = await res.json();
-  if (rows.length === 0) return { pass: true, detail: 'HTTP 200, 0 rows — RLS correctly hides anon from blocked_users' };
+  if (rows.length === 0) return { pass: true, detail: 'HTTP 200, 0 rows — RLS correctly hides anon from hidden_reviews' };
+  return { pass: false, detail: `HTTP 200 but returned ${rows.length} row(s) — RLS is not restricting anon reads!` };
+});
+
+// 11. Anonymous SELECT on banned_users returns 0 rows — RLS is on with
+//     zero policies; the founder is the only one who ever reads this
+//     table, and only from the dashboard (which bypasses RLS as the
+//     table owner). No client role should ever see who is banned.
+await assert('anonymous SELECT on banned_users returns 0 rows', async () => {
+  const res = await fetch(`${url}/rest/v1/banned_users?select=user_id&limit=1`, { headers: H });
+  if (res.status === 404) return { pass: false, detail: 'table does not exist yet — migration 003 not applied' };
+  if (res.status === 401 || res.status === 403) {
+    const body = await res.text().catch(() => '');
+    return { pass: true, detail: `HTTP ${res.status} — correctly denied: ${body.slice(0, 120)}` };
+  }
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    return { pass: false, detail: `HTTP ${res.status}: ${body.slice(0, 150)}` };
+  }
+  const rows = await res.json();
+  if (rows.length === 0) return { pass: true, detail: 'HTTP 200, 0 rows — RLS correctly hides anon from banned_users' };
   return { pass: false, detail: `HTTP 200 but returned ${rows.length} row(s) — RLS is not restricting anon reads!` };
 });
 
