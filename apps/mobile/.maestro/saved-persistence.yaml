@@ -10,8 +10,8 @@
 appId: host.exp.Exponent
 name: HerStop saved stop persists across a relaunch (signed-in path)
 ---
-- tapOn: "Explore"
-- assertVisible: "Explore"
+- tapOn: ".*Explore.*"
+- assertVisible: ".*Explore.*"
 
 - tapOn:
     id: "stop-card-.*"
@@ -21,25 +21,27 @@ name: HerStop saved stop persists across a relaunch (signed-in path)
 
 - tapOn:
     id: "stop-detail-bookmark"
-- back
+- tapOn: "Back"
 
-- tapOn: "Saved"
+- tapOn: ".*Saved.*"
 - assertVisible: "Saved Stops"
 - assertNotVisible: "No saved stops yet"
 - assertNotVisible: "Sign in"
-- takeScreenshot: /tmp/maestro-herstop-saved-before-relaunch
+- takeScreenshot: maestro-herstop-saved-before-relaunch
 
 # The real persistence check: kill and relaunch, then look again.
 - launchApp:
     clearState: false
-- runFlow:
-    when:
-      visible: "HerStop"
-    commands:
-      - tapOn: "HerStop"
-- takeScreenshot: /tmp/maestro-herstop-relaunch-immediate
-- tapOn: "Saved"
+- extendedWaitUntil:
+    visible: "HerStop"
+    timeout: 8000
+    optional: true
+- tapOn:
+    text: "HerStop"
+    optional: true
+- takeScreenshot: maestro-herstop-relaunch-immediate
+- tapOn: ".*Saved.*"
 - assertVisible: "Saved Stops"
 - assertNotVisible: "No saved stops yet"
 - assertNotVisible: "Sign in"
-- takeScreenshot: /tmp/maestro-herstop-saved-after-relaunch
+- takeScreenshot: maestro-herstop-saved-after-relaunch

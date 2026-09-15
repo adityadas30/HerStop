@@ -11,21 +11,28 @@ name: HerStop Saved tab guest invitation
 - launchApp:
     clearState: true
 
-- runFlow:
-    when:
-      visible: "HerStop"
-    commands:
-      - tapOn: "HerStop"
+# See smoke.yaml for why this uses extendedWaitUntil + optional tapOn rather
+# than `runFlow: when: visible` (that pattern raced ahead of the Expo Go home
+# screen actually rendering and silently skipped a real element).
+- extendedWaitUntil:
+    visible: "HerStop"
+    timeout: 8000
+    optional: true
+- tapOn:
+    text: "HerStop"
+    optional: true
 
-- runFlow:
-    when:
-      visible: "Get Started"
-    commands:
-      - tapOn: "Get Started"
+- extendedWaitUntil:
+    visible: "Get Started"
+    timeout: 5000
+    optional: true
+- tapOn:
+    text: "Get Started"
+    optional: true
 
-- tapOn: "Saved"
+- tapOn: ".*Saved.*"
 - assertVisible: "Saved Stops"
 - assertVisible: "Save stops for later"
 - assertVisible: "Sign in"
 - assertNotVisible: "Verified safe"
-- takeScreenshot: /tmp/maestro-herstop-saved-guest
+- takeScreenshot: maestro-herstop-saved-guest
