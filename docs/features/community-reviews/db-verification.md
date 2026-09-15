@@ -71,7 +71,8 @@ having count(*) > 1;
 4. Run the post-apply checks below.
 5. Note the run in `docs/agent-os/STATUS.md` and update the migration's status in
    `docs/migrations/README.md` to "applied".
-6. **Do not run `004_seed_real_stops_i65.sql` yet — it does not exist.** See §7.
+6. `docs/migrations/004_seed_real_stops_i65.sql` (seeds 18 real stops, replacing the fictional
+   ones) is ready and depends on 003 — apply order is **003, then 004**. See §7.
 
 ## 3. Post-apply checks
 
@@ -312,26 +313,121 @@ comments for the gating logic).
   live would violate the "never edit an applied migration" rule in `docs/migrations/README.md`
   and would need a `005` instead.
 
-## 7. Part 2 — seed real stops (004) — NOT COMPLETED
+## 7. Part 2 — seed real stops (004)
 
-Task instructions pointed at a scratch folder
-(`/private/tmp/claude-501/-Users-adityadas-herstop/6cadce63-358f-45fa-bd3c-4b0738c13058/scratchpad/beta-stops/`)
-expected to contain `beta-stops.json` and `provenance.json` (OpenStreetMap/Nominatim-derived
-data for 16 real I-65 stops between West Lafayette and Indianapolis). That folder exists but is
-**empty** — confirmed 2026-09-15, and a full search of `/private/tmp/claude-501` found no copy of
-either file anywhere on the machine.
+Migration: `docs/migrations/004_seed_real_stops_i65.sql` — **proposed, not applied.** Depends on
+003 being applied first (see the migration file's own header comment for why — reviews behaving
+sanely, not a hard technical requirement).
 
-Per the task's own instruction ("If that scratch folder is gone, STOP Part 2 and say so in your
-report — do not invent stop data"), Part 2 was not attempted:
+An earlier attempt at this (2026-09-15) was stopped: the scratch folder the original task pointed
+at (`/private/tmp/claude-501/.../scratchpad/beta-stops/`) was empty, and per that task's own
+instruction ("do not invent stop data") nothing was created. The dataset has since been rebuilt
+and committed to the repo proper at
+`docs/data/osm-i65-west-lafayette-indianapolis/` (`beta-stops.json`, `provenance.json`,
+`README.md`) — 18 real stops, OpenStreetMap + Nominatim, `osm-way-229125508` (Lebanon Rest Area)
+already excluded. 004 was written directly from that committed data; nothing was copied or
+re-derived.
 
-- `docs/migrations/004_seed_real_stops_i65.sql` — **not created.**
-- `docs/data/osm-i65-west-lafayette-indianapolis/` — **not created.**
-- The fictional test rows (`stops` ids `'1'`–`'6'`, including "Willow Creek Plaza TEST") are
-  **still live** — nothing was deleted, since 004 never ran.
+### Pre-flight (founder, before running 004)
 
-**To finish this later:** re-run the OpenStreetMap + Nominatim extraction that produced
-`beta-stops.json`/`provenance.json` (16 stops, ODbL-licensed, "© OpenStreetMap contributors"
-attribution required), excluding `osm-way-229125508` (Lebanon Rest Area — tagged
-`landuse=construction` + `toilets=no`), and hand the two files to db-engineer again with the same
-instructions. No SQL, schema, or app-code work is blocked by this — Part 1 (003) stands on its
-own and does not depend on 004.
+Read-only anon-key probe run 2026-09-15 against the live project, confirming the fictional rows
+004 deletes are exactly the ones expected:
+
+```
+GET {url}/rest/v1/stops?select=id,name&order=id
+→ HTTP 200:
+  [{"id":"1","name":"Willow Creek Plaza TEST"}, {"id":"2","name":"The Atlas Point"},
+   {"id":"3","name":"Meridian Transit Hub"}, {"id":"4","name":"Cedar Falls Rest Area"},
+   {"id":"5","name":"Sunrise Travel Center"}, {"id":"6","name":"Harbor View Stop"}]
+```
+
+Six rows, ids `'1'`–`'6'`, including "Willow Creek Plaza TEST" — matches what 004's `delete`
+targets. If the founder's own check of this endpoint (or the Table Editor) shows anything
+different — a 7th row, a different id set, or id `'1'` no longer marked TEST — **stop and
+re-confirm which rows are actually fictional before running 004**; the migration's `delete`
+statement only ever touches this exact id list, so it can't accidentally remove a real stop, but
+it also won't remove a fictional row that isn't on the list.
+
+### Apply (founder action, Supabase SQL Editor)
+
+1. Confirm 003 has already been applied (`docs/migrations/README.md` status column).
+2. Read `docs/migrations/004_seed_real_stops_i65.sql` top to bottom.
+3. Paste and run. Wrapped in its own `begin … commit`; the delete targets a fixed id list and the
+   insert is `on conflict (id) do update set …`, so re-running the whole file is safe.
+4. Run the verify checks below.
+5. Note the run in `docs/agent-os/STATUS.md`; update `docs/migrations/README.md` to "applied".
+
+### Verify (founder action)
+
+From `apps/mobile/`:
+
+```bash
+npm run supabase:check
+```
+
+Should show **18 rows** in `stops`, and no row named with a "TEST" marker. Also spot-check in the
+SQL Editor:
+
+```sql
+select count(*) from stops;                              -- expect 18
+select id, name from stops where name ilike '%test%';    -- expect 0 rows
+select count(*) from stops where categories = '{}';      -- expect 4 (the travel-centre rows)
+```
+
+`npm run rls:check` is unaffected by 004 (it doesn't probe `stops` row *content*, only that anon
+SELECT on `stops` succeeds at all — assertion 1/2 in `rls-check.mjs` — which is unchanged either
+way).
+
+### Rollback — development-only
+
+```sql
+begin;
+
+delete from stops
+where id in (
+  'osm-way-1365688111', 'osm-way-571837327', 'osm-way-283289437', 'osm-node-12688099567',
+  'osm-way-1195033424', 'osm-way-1196146349', 'osm-node-7759210731', 'osm-way-230775623',
+  'osm-node-11182191149', 'osm-way-1545554017', 'osm-way-225347315', 'osm-way-223165641',
+  'osm-way-766083124', 'osm-way-1026315492', 'osm-node-12687832610', 'osm-way-220710454',
+  'osm-way-951355881', 'osm-way-432174373'
+);
+
+-- Re-inserts the original fictional rows exactly as docs/schema.sql seeded them, so the app has
+-- *some* stops again while iterating locally.
+insert into stops (id, name, address, latitude, longitude, badge, categories, tags, rating, review_count, image_color)
+values
+  ('1', 'Willow Creek Plaza', '1420 Willow Creek Rd, Exit 42', 40.5642, -74.2891, 'recommended',
+   '{"Gas","Restroom","Well Lit"}',
+   '[{"label":"Well Lit","icon":"lightbulb.fill"},{"label":"Clean Restroom","icon":"sparkles"}]',
+   4.6, 128, '#C9B8A8'),
+  ('2', 'The Atlas Point', '780 Route 1 South, Woodbridge', 40.5573, -74.2846, 'good',
+   '{"Gas","Open Now"}',
+   '[{"label":"Staffed 24/7","icon":"person.fill"},{"label":"CCTV Monitored","icon":"video.fill"}]',
+   3.9, 42, '#B8A898'),
+  ('3', 'Meridian Transit Hub', '55 Meridian Blvd, Newark', 40.7357, -74.1724, 'recommended',
+   '{"Well Lit","Open Now"}',
+   '[{"label":"Safety Help Point","icon":"shield.fill"},{"label":"High Visibility","icon":"lightbulb.fill"}]',
+   4.4, 87, '#8B9DAF'),
+  ('4', 'Cedar Falls Rest Area', 'I-78 West, Mile Marker 34', 40.6684, -74.6851, 'recommended',
+   '{"Restroom","Well Lit"}',
+   '[{"label":"Clean Restroom","icon":"sparkles"},{"label":"Well Lit","icon":"lightbulb.fill"},{"label":"CCTV Monitored","icon":"video.fill"}]',
+   4.2, 63, '#A8B5A3'),
+  ('5', 'Sunrise Travel Center', '2200 US-9, Old Bridge', 40.3987, -74.2654, 'recommended',
+   '{"Gas","Restroom","Open Now","Well Lit"}',
+   '[{"label":"Well Lit","icon":"lightbulb.fill"},{"label":"Clean Restroom","icon":"sparkles"},{"label":"Staffed 24/7","icon":"person.fill"}]',
+   4.8, 214, '#D4C1A8'),
+  ('6', 'Harbor View Stop', '410 Harbor Blvd, Perth Amboy', 40.5093, -74.2652, 'good',
+   '{"Open Now"}',
+   '[{"label":"CCTV Monitored","icon":"video.fill"}]',
+   3.5, 18, '#9BADB8')
+on conflict (id) do nothing;
+
+commit;
+```
+
+**This rollback is development-only.** It re-seeds fictional/placeholder data (row `'1'` comes
+back as "Willow Creek Plaza", matching `docs/schema.sql`'s original seed exactly — not
+"... TEST", which is whatever the live row happened to be renamed to after that file was first
+applied) — never run it against a project real travelers are using; any `saved_stops`/`reviews`
+rows created against the 18 real stops in the meantime would cascade-delete along with them,
+which is real user data loss, not a test-data cleanup.
