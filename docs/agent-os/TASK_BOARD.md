@@ -14,22 +14,32 @@ _(none — migration 002 applied 2026-09-10, `rls:check` 5/5)_
   Downstream of reviews in the dependency chain.
 
 ## In progress
-Sprint dependency graph (founder priority order, 2026-09-10):
-- ✅ dev consolidation — `dev` fast-forwarded to the integration branch and pushed.
-- ✅ OTP length bug — input accepted 6 digits, Supabase sends 8; now accepts 6–10 (`fbc43c3`).
-- ✅ saved-stops cold-launch fix merged (`7fa6dd0`).
-- ⏳ **auth UI + saved-stops live QA** [mobile-verifier, Maestro, sim `7ABF361F`] — waits on the
-  founder's OTP code; "sign back in restores list" deferred to the second OTP.
-- ⏳ **migration 003** (reviews privacy + report/block) — drafted and merged; `security-reviewer`
-  running → founder approval brief → founder runs it.
-- ⏳ **community-reviews app side** [mobile-builder, worktree, sim `BBB1BA5C`, port 8083] —
-  reviews, form, report/hide, scoring labels from real reviews only, removes fabricated
-  rating/count/badge/distance. Spec: `docs/features/community-reviews/`.
-- ⏳ **Coming Soon surfaces + TestFlight config** [mobile-builder, worktree, sim `A7B10A46`, port 8082].
-- ⏳ **OSM beta stop dataset** (I-65 West Lafayette → Indianapolis) [research agent, scratchpad]
-  → seed migration (founder runs; replaces the fictional stops).
-- ⬜ foreground location + distance (`expo-location`) — after reviews merges (same files).
-- ⬜ loading/empty/error polish → Sentry → TestFlight build (founder login) → beta-readiness audit.
+**Confirmed critical path to beta (founder, 2026-09-15). Do not start anything below step 4
+until steps 1–4 are live — no location, maps, Sentry, PostHog, or polish before that.**
+
+1. ⏳ **OSM attribution** [`agent/osm-attribution`, mobile-builder] — "© OpenStreetMap
+   contributors" on Explore + stop detail, small and unobtrusive, existing theme tokens.
+   Commit only, founder reviews before merge. **Hard gate: migration 004's data must not be
+   user-visible without this** (ODbL requirement).
+2. ⏳ **Founder runs migration 003** (reviews privacy + moderation). Reviewed twice
+   (verdict BLOCK → fixed → PASS). Pre-flight + apply steps:
+   `docs/features/community-reviews/db-verification.md` §1. Verify `rls:check` → 12/12.
+3. ⏳ **Founder runs migration 004** (18 real I-65 stops, replaces the 6 fictional rows).
+   Verify `supabase:check` → 18 rows, no "TEST" marker.
+4. ⏳ **Reviews live verification** [mobile-verifier, fresh context, Maestro] — write / read /
+   report / hide a real review; confirm labels come only from real reviews; grep-confirm no
+   `stop.rating` / `stop.reviewCount` / `stop.badge` remain live. Needs one founder OTP code.
+5. ⬜ **Account deletion** [`agent/account-deletion`] — `005_delete_own_account.sql` + Profile UI.
+   Apple Guideline 5.1.1(v). **Agent must stop and ask the founder hard-delete vs soft-delete
+   (with pros/cons) before implementing.** No SQL execution, no merge without review.
+6. ⬜ **Privacy policy + support contact URLs** — required for App Store and for UGC (1.2).
+7. ⬜ **Resend SMTP** [founder] — Supabase's default sender only delivers to project team
+   members, so no outside beta tester can sign in until this is done.
+8. ⬜ **EAS build** [founder login] → internal TestFlight. Submit needs explicit approval.
+
+Done this sprint and merged: OTP length fix (`fbc43c3`), saved-stops cold-launch fix (`7fa6dd0`),
+saved-stops live QA (all criteria PASS on a real account), Coming Soon previews + TestFlight
+config, Maestro flows (fixed and verified working), 003 + 004 staged, OSM dataset committed.
 
 ## Done
 - **repo maintenance** [Lead] — canonical docs brought in line with repo reality; 8 merged, clean
