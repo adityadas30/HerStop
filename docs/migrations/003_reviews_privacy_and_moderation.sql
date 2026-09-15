@@ -91,9 +91,16 @@ create or replace function review_publish_delay()
 returns interval
 language sql
 immutable
+set search_path = public, pg_temp
 as $$
   select interval '24 hours';
 $$;
+
+-- Nothing calls this directly from the client (only the two definer
+-- functions below, internally) — revoked from PUBLIC for consistency
+-- with every other function in this file, not because leaving it
+-- grantable would itself be a hole.
+revoke execute on function review_publish_delay() from public;
 
 -- ------------------------------------------------------------
 -- banned_users
@@ -116,6 +123,39 @@ create table if not exists banned_users (
 
 alter table banned_users enable row level security;
 -- No policies — see comment above.
+
+-- ------------------------------------------------------------
+-- is_banned(p_user_id uuid)
+-- Callable by: authenticated only.
+--
+-- BLOCKING FIX (second security review, 2026-09-15): the reviews
+-- insert/update policies below need to check banned_users, but a
+-- policy's USING/WITH CHECK expression is evaluated as the invoking
+-- role (authenticated), not the table owner — RLS applies to every
+-- table a policy expression touches, evaluated under that same
+-- invoking role. banned_users has RLS on with zero policies, so a
+-- plain `select 1 from banned_users where user_id = auth.uid()`
+-- inlined into a policy always sees zero rows for `authenticated`,
+-- regardless of whether that user is actually banned — the check was
+-- silently a no-op (fail OPEN, not fail closed). Wrapping the same
+-- lookup in a `security definer` function fixes it: the function body
+-- runs as its owner (which bypasses RLS on banned_users, same as
+-- get_stop_reviews below), so it actually sees the row, and only the
+-- function's boolean *result* — not row access — crosses back into
+-- the policy.
+-- ------------------------------------------------------------
+create or replace function is_banned(p_user_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public, pg_temp
+as $$
+  select exists (select 1 from banned_users b where b.user_id = p_user_id);
+$$;
+
+revoke execute on function is_banned(uuid) from public, anon;
+grant execute on function is_banned(uuid) to authenticated;
 
 -- ------------------------------------------------------------
 -- hidden_reviews
@@ -185,8 +225,9 @@ alter table review_reports enable row level security;
 -- (column-level rules based on old vs. new value)
 --
 -- Three things this trigger locks down, all only for ordinary
--- signed-in users (auth.role() = 'authenticated' — see the note below
--- on why that matters):
+-- client-originated writes (current_user in ('authenticated', 'anon')
+-- — see the note below on why that matters, and on why this checks
+-- current_user rather than auth.role()):
 --   1. is_hidden: a brand new review is never pre-hidden (insert), and
 --      an author's edit can't flip is_hidden either way (update).
 --      Closes 002's documented "author can un-hide" gap.
@@ -199,12 +240,27 @@ alter table review_reports enable row level security;
 --   3. stop_id / user_id: pinned on update, so an "edit" can't secretly
 --      re-point a review at a different stop or reassign its author.
 --
--- auth.role() reads the request's JWT claims. The Supabase SQL
--- Editor / dashboard runs as the `postgres` role with no JWT
--- attached, so auth.role() returns null there, not 'authenticated'
--- — the condition below is false and the trigger does nothing. That
--- is exactly what keeps the founder free to hide/un-hide a review, or
--- hand-correct a bad row, from the dashboard.
+-- BLOCKING FIX (second security review, 2026-09-15): the original gate
+-- was `auth.role() = 'authenticated'`. auth.role() is a deprecated
+-- Supabase helper that reads a claim out of the request JWT — if that
+-- claim is ever absent or named differently than auth.role() expects,
+-- it silently returns null, the condition is false, and this trigger
+-- does *nothing*: forged created_at, un-hiding, and stop_id/user_id
+-- re-pointing would all go through unnoticed (fails OPEN). This
+-- function is deliberately NOT `security definer`, so `current_user`
+-- here is the actual database role the connection authenticated as —
+-- PostgREST always connects as `authenticated` (signed-in) or `anon`
+-- (guest) for ordinary API traffic, and that role assignment happens
+-- at the connection/JWT-verification layer, not from a claim this
+-- function has to parse itself. The Supabase SQL Editor / dashboard
+-- connects as `postgres`, which matches neither, so the condition
+-- below is false there — exactly what keeps the founder free to
+-- hide/un-hide a review, or hand-correct a bad row, from the
+-- dashboard. `anon` is included even though anon can never satisfy
+-- this trigger's table's insert/update policies (both require
+-- `auth.uid() = user_id`, and anon has no auth.uid()) — defense in
+-- depth, since the trigger runs before RLS's WITH CHECK is evaluated,
+-- not after.
 -- ------------------------------------------------------------
 create or replace function reviews_enforce_invariants()
 returns trigger
@@ -212,7 +268,7 @@ language plpgsql
 set search_path = public
 as $$
 begin
-  if auth.role() = 'authenticated' then
+  if current_user in ('authenticated', 'anon') then
     if tg_op = 'INSERT' then
       new.is_hidden := false;
       new.created_at := now();
@@ -248,13 +304,17 @@ create trigger reviews_enforce_invariants_trigger
 -- the policy approach only ever applies to actual client writes,
 -- because dashboard writes run as `postgres` and RLS policies don't
 -- apply to a table's owner role at all.
+--
+-- Uses is_banned(auth.uid()) rather than an inline `select … from
+-- banned_users` — see the comment above is_banned() for why the
+-- inline form silently never blocked anyone.
 -- ------------------------------------------------------------
 drop policy if exists "Authenticated users can write their own review" on reviews;
 create policy "Authenticated users can write their own review"
   on reviews for insert
   with check (
     auth.uid() = user_id
-    and not exists (select 1 from banned_users b where b.user_id = auth.uid())
+    and not is_banned(auth.uid())
   );
 
 drop policy if exists "Authors can edit their own review" on reviews;
@@ -263,7 +323,7 @@ create policy "Authors can edit their own review"
   using (auth.uid() = user_id)
   with check (
     auth.uid() = user_id
-    and not exists (select 1 from banned_users b where b.user_id = auth.uid())
+    and not is_banned(auth.uid())
   );
 
 -- ------------------------------------------------------------
@@ -304,6 +364,19 @@ create policy "Authors can delete their own review"
 -- migration. `created_month` is `date_trunc('month', ...)`, so no
 -- day-level timestamp (which could hint at travel timing) leaves
 -- the database either.
+--
+-- BLOCKING FIX (second security review, 2026-09-15): the publish-delay
+-- comparison used to be `r.created_at < now() - review_publish_delay()`
+-- — a boundary that moves every minute. Anyone polling this function
+-- (or get_stop_review_stats, up to 200 stop ids per anon call) right
+-- around when a review should cross that boundary can narrow its
+-- `created_at` down to a ~1-minute window, defeating the whole point
+-- of only exposing `created_month`. Comparing against
+-- `date_trunc('day', now() - review_publish_delay())` instead makes
+-- the boundary move once every 24 hours, at midnight UTC: every review
+-- that crossed 24h old since the last boundary becomes visible in the
+-- same batch, so polling only ever reveals "some review from this
+-- 24h-wide batch published today", not a specific timestamp.
 -- ------------------------------------------------------------
 create or replace function get_stop_reviews(p_stop_id text)
 returns table (
@@ -325,7 +398,7 @@ returns table (
 language sql
 security definer
 stable
-set search_path = public
+set search_path = public, pg_temp
 as $$
   select
     r.id,
@@ -345,7 +418,10 @@ as $$
   from reviews r
   where r.stop_id = p_stop_id
     and (r.is_hidden = false or r.user_id = auth.uid())
-    and (r.user_id = auth.uid() or r.created_at < now() - review_publish_delay())
+    and (
+      r.user_id = auth.uid()
+      or r.created_at < date_trunc('day', now() - review_publish_delay())
+    )
     and not exists (
       select 1 from hidden_reviews h
       where h.user_id = auth.uid() and h.review_id = r.id
@@ -378,6 +454,12 @@ grant execute on function get_stop_reviews(text) to anon, authenticated;
 -- over — Postgres array-slice syntax, keeps a pathological huge array
 -- from turning this into an expensive scan regardless of who calls it
 -- (anon has no other rate limit here).
+--
+-- Same coarse day-boundary publish-delay comparison as get_stop_reviews
+-- above, for the same reason (see that function's comment) — this is
+-- actually the higher-risk of the two for the timestamp-recovery
+-- attack the second security review flagged, since one anon call here
+-- can poll up to 200 stops' worth of boundary-crossing at once.
 -- ------------------------------------------------------------
 create or replace function get_stop_review_stats(p_stop_ids text[])
 returns table (
@@ -397,7 +479,7 @@ returns table (
 language sql
 security definer
 stable
-set search_path = public
+set search_path = public, pg_temp
 as $$
   select
     r.stop_id,
@@ -415,7 +497,7 @@ as $$
   from reviews r
   where r.stop_id = any(p_stop_ids[1:200])
     and r.is_hidden = false
-    and r.created_at < now() - review_publish_delay()
+    and r.created_at < date_trunc('day', now() - review_publish_delay())
     and not exists (
       select 1 from banned_users bu where bu.user_id = r.user_id
     )
@@ -443,24 +525,34 @@ grant execute on function get_stop_review_stats(text[]) to anon, authenticated;
 -- revoke their ability to report a review they already saw. Idempotent
 -- — a second report from the same user on the same review is a no-op,
 -- not an error (`unique (review_id, reporter_id)` + ON CONFLICT).
+--
+-- CHEAP FIX (second security review, 2026-09-15): this used to check
+-- only is_hidden, not the publish delay or a banned author — meaning
+-- it accepted a review id for a review get_stop_reviews would never
+-- actually show a client (still inside its 24h delay, or by a since-
+-- banned author). Now mirrors get_stop_reviews' own visibility rule
+-- exactly (own review always OK; someone else's review needs
+-- not-hidden, past the publish delay, and not by a banned author).
 -- ------------------------------------------------------------
 create or replace function report_review(p_review_id uuid, p_reason text, p_note text default null)
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, pg_temp
 as $$
 declare
-  v_uid    uuid := auth.uid();
-  v_hidden boolean;
-  v_author uuid;
-  v_note   text;
+  v_uid        uuid := auth.uid();
+  v_hidden     boolean;
+  v_author     uuid;
+  v_note       text;
+  v_created_at timestamptz;
 begin
   if v_uid is null then
     raise exception 'report_review requires an authenticated user';
   end if;
 
-  select is_hidden, user_id, note into v_hidden, v_author, v_note
+  select is_hidden, user_id, note, created_at
+    into v_hidden, v_author, v_note, v_created_at
   from reviews
   where id = p_review_id;
 
@@ -468,8 +560,13 @@ begin
     raise exception 'review not found or not visible to the caller';
   end if;
 
-  if v_hidden and v_author <> v_uid then
-    raise exception 'review not found or not visible to the caller';
+  if v_author <> v_uid then
+    if v_hidden
+      or v_created_at >= date_trunc('day', now() - review_publish_delay())
+      or is_banned(v_author)
+    then
+      raise exception 'review not found or not visible to the caller';
+    end if;
   end if;
 
   insert into review_reports (review_id, reporter_id, reason, note, review_note_snapshot)
@@ -496,23 +593,29 @@ grant execute on function report_review(uuid, text, text) to authenticated;
 -- author-hid-their-own-review row (see the get_stop_reviews comment
 -- on why that invariant matters). Idempotent via
 -- `on conflict … do nothing`, same as report_review.
+--
+-- CHEAP FIX (second security review, 2026-09-15): same gap and same
+-- fix as report_review above — now also refuses to hide a review
+-- that's still inside its publish delay or by a banned author, not
+-- just a hidden one, matching get_stop_reviews' own visibility rule.
 -- ------------------------------------------------------------
 create or replace function hide_review(p_review_id uuid)
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, pg_temp
 as $$
 declare
-  v_uid    uuid := auth.uid();
-  v_hidden boolean;
-  v_author uuid;
+  v_uid        uuid := auth.uid();
+  v_hidden     boolean;
+  v_author     uuid;
+  v_created_at timestamptz;
 begin
   if v_uid is null then
     raise exception 'hide_review requires an authenticated user';
   end if;
 
-  select is_hidden, user_id into v_hidden, v_author
+  select is_hidden, user_id, created_at into v_hidden, v_author, v_created_at
   from reviews
   where id = p_review_id;
 
@@ -520,12 +623,15 @@ begin
     raise exception 'review not found or not visible to the caller';
   end if;
 
-  if v_hidden and v_author <> v_uid then
-    raise exception 'review not found or not visible to the caller';
-  end if;
-
   if v_author = v_uid then
     return;
+  end if;
+
+  if v_hidden
+    or v_created_at >= date_trunc('day', now() - review_publish_delay())
+    or is_banned(v_author)
+  then
+    raise exception 'review not found or not visible to the caller';
   end if;
 
   insert into hidden_reviews (user_id, review_id)

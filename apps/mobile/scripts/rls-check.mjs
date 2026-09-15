@@ -170,6 +170,15 @@ function isMissingSchemaObject(status, body) {
   return status === 404 && /PGRST20[25]/.test(body);
 }
 
+// A read-function response is a JSON array of row objects. This checks
+// AC7 directly (community-reviews spec §6: "No user_id of other travelers
+// ever reaches the client") rather than just trusting HTTP 200 — a
+// regression that added `user_id` back to the SELECT list would still
+// return 200, so assertions 5/6 below parse the body and inspect it.
+function containsUserId(rows) {
+  return Array.isArray(rows) && rows.some((row) => row && typeof row === 'object' && 'user_id' in row);
+}
+
 // 5. Anonymous can call get_stop_reviews — it's meant to be the public read
 //    path for reviews now that the base table's public policy is gone.
 await assert('anonymous can call get_stop_reviews', async () => {
@@ -183,7 +192,16 @@ await assert('anonymous can call get_stop_reviews', async () => {
     return { pass: false, detail: 'function does not exist yet — migration 003 not applied' };
   }
   if (!res.ok) return { pass: false, detail: `HTTP ${res.status}: ${body.slice(0, 150)}` };
-  return { pass: true, detail: `HTTP 200 — callable by anon` };
+  let rows;
+  try {
+    rows = JSON.parse(body);
+  } catch {
+    return { pass: false, detail: 'HTTP 200 but response body was not valid JSON' };
+  }
+  if (containsUserId(rows)) {
+    return { pass: false, detail: 'HTTP 200 but a row contains a user_id key — AC7 violated!' };
+  }
+  return { pass: true, detail: `HTTP 200, ${rows.length} row(s), callable by anon, no user_id key (AC7)` };
 });
 
 // 6. Anonymous can call get_stop_review_stats — same reasoning as above.
@@ -198,8 +216,31 @@ await assert('anonymous can call get_stop_review_stats', async () => {
     return { pass: false, detail: 'function does not exist yet — migration 003 not applied' };
   }
   if (!res.ok) return { pass: false, detail: `HTTP ${res.status}: ${body.slice(0, 150)}` };
-  return { pass: true, detail: `HTTP 200 — callable by anon` };
+  let rows;
+  try {
+    rows = JSON.parse(body);
+  } catch {
+    return { pass: false, detail: 'HTTP 200 but response body was not valid JSON' };
+  }
+  if (containsUserId(rows)) {
+    return { pass: false, detail: 'HTTP 200 but a row contains a user_id key — AC7 violated!' };
+  }
+  return { pass: true, detail: `HTTP 200, ${rows.length} row(s), callable by anon, no user_id key (AC7)` };
 });
+
+// Assertions 7/8 below need to tell apart two different causes of the same
+// PGRST202 "function not found" 404: (a) migration 003 genuinely isn't
+// applied yet, vs. (b) 003 IS applied but PostgREST's schema cache filters
+// out functions anon has no EXECUTE privilege on — which report_review and
+// hide_review deliberately have none of (authenticated-only by design), so
+// that's actually the EXPECTED shape once 003 is live, not a failure. If
+// the read functions above (5/6) already proved 003 is applied, a 404 here
+// is case (b) and should PASS, not FAIL with a misleading "not applied".
+function readFunctionsConfirmedApplied() {
+  const a = results.find((r) => r.name === 'anonymous can call get_stop_reviews');
+  const b = results.find((r) => r.name === 'anonymous can call get_stop_review_stats');
+  return Boolean(a?.pass && b?.pass);
+}
 
 // 7. Anonymous calling report_review is rejected. No grant exists for anon
 //    (spec: authenticated only), so Postgres should refuse execute before
@@ -213,11 +254,18 @@ await assert('anonymous calling report_review is rejected', async () => {
     body: JSON.stringify({ p_review_id: fakeReviewId, p_reason: 'spam' }),
   });
   const body = await res.text().catch(() => '');
-  if (isMissingSchemaObject(res.status, body)) {
-    return { pass: false, detail: 'function does not exist yet — migration 003 not applied' };
-  }
   if (res.status === 401 || res.status === 403) {
     return { pass: true, detail: `HTTP ${res.status} — correctly denied (no execute grant for anon)` };
+  }
+  if (isMissingSchemaObject(res.status, body)) {
+    if (readFunctionsConfirmedApplied()) {
+      return {
+        pass: true,
+        detail: `HTTP ${res.status} — function invisible to anon (no execute grant); ` +
+          'migration 003 is applied (read RPCs in assertions 5/6 already confirmed it)',
+      };
+    }
+    return { pass: false, detail: 'function does not exist yet — migration 003 not applied' };
   }
   return { pass: false, detail: `HTTP ${res.status} — expected 401/403: ${body.slice(0, 150)}` };
 });
@@ -231,11 +279,18 @@ await assert('anonymous calling hide_review is rejected', async () => {
     body: JSON.stringify({ p_review_id: fakeReviewId }),
   });
   const body = await res.text().catch(() => '');
-  if (isMissingSchemaObject(res.status, body)) {
-    return { pass: false, detail: 'function does not exist yet — migration 003 not applied' };
-  }
   if (res.status === 401 || res.status === 403) {
     return { pass: true, detail: `HTTP ${res.status} — correctly denied (no execute grant for anon)` };
+  }
+  if (isMissingSchemaObject(res.status, body)) {
+    if (readFunctionsConfirmedApplied()) {
+      return {
+        pass: true,
+        detail: `HTTP ${res.status} — function invisible to anon (no execute grant); ` +
+          'migration 003 is applied (read RPCs in assertions 5/6 already confirmed it)',
+      };
+    }
+    return { pass: false, detail: 'function does not exist yet — migration 003 not applied' };
   }
   return { pass: false, detail: `HTTP ${res.status} — expected 401/403: ${body.slice(0, 150)}` };
 });
