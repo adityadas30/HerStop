@@ -115,6 +115,26 @@ Flagging clearly rather than quietly rewriting a shared branch.
    approval; the branch is backed up on origin but not merged).
 
 ## Log
+- **2026-09-17** — **Reviews merged; fabricated data is gone from the app.**
+  `community-reviews` app side merged (`1f7ae94`): review read/write, report + per-review hide,
+  `lib/scoring.ts` labels (Recommended Stop / Good Option / Use Caution / Limited Data) computed
+  from real reviews only, `app/review/[stopId].tsx` form, ReviewCard/ScoreBadge/ChoiceChip/
+  StarRatingInput. **`stop.rating` / `stop.badge` / `stop.reviewCount` no longer appear in any
+  screen** — grep-confirmed. `tsc` ✅ `lint` ✅.
+  Gotcha worth remembering: right after the merge `tsc` failed on
+  `router.push(\`/review/${id}\`)`. That was NOT a code defect — `.expo/types/router.d.ts` is
+  gitignored codegen and was 2 days stale, predating the new route file. Starting the dev server
+  for ~5s regenerated it and `tsc` went green with no code change. Don't "fix" that error by
+  rewriting the call site.
+  The builder that wrote this **hung without reporting** (second stall this sprint, same pattern as
+  09-11). Its work was committed and its worktree clean, so the Lead merged, gated, and killed it.
+  `agent/osm-attribution` (`53b46ff`, 18 lines, "© OpenStreetMap contributors" on Explore + stop
+  detail) is **committed but deliberately NOT merged** — founder reviews first. Its Level 2
+  screenshot is BLOCKED: the machine sat at load average ~320–400 (macOS `syspolicyd` /
+  `signpost_reporter` / PackageKit `installd` dominating, 882 processes, not our agents), and every
+  `simctl` call timed out. Simulator verification is unreliable until that settles.
+  **Still founder-gated: run 003, then 004.** Nothing downstream (reviews live verification,
+  account deletion, privacy/support URLs, Resend, EAS) moves until those land.
 - **2026-09-15** — Sprint resumed after a multi-day gap. On 09-11 three agents (reviews builder,
   db-engineer, Maestro QA) died together to an infrastructure stall, not to code: the reviews
   builder's partial `lib/scoring.ts` + `lib/types.ts` survived in its worktree, the QA agent's
