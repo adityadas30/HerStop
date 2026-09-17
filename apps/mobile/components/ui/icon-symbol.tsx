@@ -37,6 +37,9 @@ const MAPPING = {
   'photo.fill': 'image',
   'xmark': 'close',
   'person.circle.fill': 'account-circle',
+  'star.fill': 'star',
+  'star': 'star-border',
+  'ellipsis': 'more-horiz',
 } as IconMapping;
 
 /**
