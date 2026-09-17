@@ -2,7 +2,7 @@ import { SymbolViewProps } from 'expo-symbols';
 
 import { MOCK_STOPS, type StopData } from '@/data/mock-stops';
 import { supabase, supabaseConfigured } from './supabase';
-import type { Review, SavedStop, Stop } from './types';
+import type { ReportReason, Review, ReviewInput, ReviewStats, SavedStop, Stop } from './types';
 
 // ---------------------------------------------------------------------------
 // DB row → UI StopData mapper
@@ -13,44 +13,17 @@ function dbToStopData(row: Stop): StopData {
     id: row.id,
     name: row.name,
     address: row.address,
-    distance: '', // computed client-side once location is available
-    distanceMiles: 0,
-    badge: row.badge,
     tags: row.tags.map((t) => ({
       label: t.label,
       icon: t.icon as SymbolViewProps['name'],
     })),
     imageColor: row.image_color,
     categories: row.categories,
-    rating: row.rating,
-    reviewCount: row.review_count,
   };
 }
 
 // ---------------------------------------------------------------------------
-// Mock fallback mapper (unchanged from before)
-// ---------------------------------------------------------------------------
-
-function mockToStop(mock: (typeof MOCK_STOPS)[number]): Stop {
-  return {
-    id: mock.id,
-    name: mock.name,
-    address: mock.address,
-    latitude: 0,
-    longitude: 0,
-    badge: mock.badge,
-    categories: mock.categories,
-    tags: mock.tags.map((t) => ({ label: t.label, icon: String(t.icon) })),
-    image_url: null,
-    image_color: mock.imageColor,
-    rating: mock.rating,
-    review_count: mock.reviewCount,
-    created_at: new Date().toISOString(),
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Public API
+// Public API — stops
 // ---------------------------------------------------------------------------
 
 /** Fetch all stops. Queries Supabase; falls back to mock data on error/empty. */
@@ -60,10 +33,7 @@ export async function getStops(): Promise<StopData[]> {
     return MOCK_STOPS;
   }
   try {
-    const { data, error } = await supabase
-      .from('stops')
-      .select('*')
-      .order('rating', { ascending: false });
+    const { data, error } = await supabase.from('stops').select('*').order('name');
 
     if (error) throw error;
     if (data && data.length > 0) {
@@ -189,8 +159,188 @@ export async function toggleSaveStop(
   }
 }
 
-/** Fetch reviews for a stop. */
-export async function getReviews(_stopId: string): Promise<Review[]> {
-  // Will query reviews table once DB is live
-  return [];
+// ---------------------------------------------------------------------------
+// Public API — reviews
+//
+// Reads go through the security-definer RPCs from migration 003 (not yet
+// applied to the live DB — calls below are expected to fail until a human
+// runs it; that failure is surfaced as an ordinary error, never faked as
+// Limited Data or an empty list). Writes stay a direct table upsert/delete,
+// same pattern as `toggleSaveStop` above — the user id always comes from the
+// session, never from a caller-supplied argument.
+// ---------------------------------------------------------------------------
+
+const GENERIC_LOAD_ERROR = "Couldn't load traveler feedback.";
+
+/**
+ * Fetch the (non-hidden, plus the caller's own) reviews for one stop via
+ * `get_stop_reviews`. `error` is only ever non-null for a real failure (e.g.
+ * the RPC doesn't exist yet) — an empty `reviews` array with `error: null`
+ * always means "no reviews", including mock mode. Callers must not confuse
+ * the two: an error must render as the error state, not as "No reviews yet".
+ */
+export async function getStopReviews(
+  stopId: string,
+): Promise<{ reviews: Review[]; error: string | null }> {
+  if (!supabaseConfigured) {
+    if (__DEV__) console.log(`[getStopReviews] MOCK fallback (reason: supabase not configured) id=${stopId}`);
+    return { reviews: [], error: null };
+  }
+  try {
+    const { data, error } = await supabase.rpc('get_stop_reviews', { p_stop_id: stopId });
+    if (error) throw error;
+    if (__DEV__) console.log(`[getStopReviews] LIVE Supabase: ${data?.length ?? 0} rows id=${stopId}`);
+    return { reviews: (data ?? []) as Review[], error: null };
+  } catch (e) {
+    if (__DEV__) console.warn(`[getStopReviews] RPC failed id=${stopId}`, e);
+    return { reviews: [], error: GENERIC_LOAD_ERROR };
+  }
+}
+
+/**
+ * Fetch aggregate review stats for a list of stop ids in one call via
+ * `get_stop_review_stats` — never call this once per stop. Stops with no
+ * (non-hidden) reviews are simply absent from the returned map, same "empty
+ * is not an error" rule as `getStopReviews`. Stats can lag a brand new review
+ * by up to 24h server-side; that's expected, not an error.
+ */
+export async function getStopReviewStats(
+  stopIds: string[],
+): Promise<{ stats: Map<string, ReviewStats>; error: string | null }> {
+  if (stopIds.length === 0) return { stats: new Map(), error: null };
+  if (!supabaseConfigured) {
+    if (__DEV__) console.log('[getStopReviewStats] MOCK fallback (reason: supabase not configured)');
+    return { stats: new Map(), error: null };
+  }
+  try {
+    const { data, error } = await supabase.rpc('get_stop_review_stats', { p_stop_ids: stopIds });
+    if (error) throw error;
+    const stats = new Map<string, ReviewStats>();
+    for (const row of (data ?? []) as ReviewStats[]) stats.set(row.stop_id, row);
+    if (__DEV__) console.log(`[getStopReviewStats] LIVE Supabase: ${stats.size} stop(s) with reviews`);
+    return { stats, error: null };
+  } catch (e) {
+    if (__DEV__) console.warn('[getStopReviewStats] RPC failed', e);
+    return { stats: new Map(), error: GENERIC_LOAD_ERROR };
+  }
+}
+
+// Stop ids the current app session has written a review for. Purely in-memory
+// (cleared on app restart) — used only to show "Visible to other travelers 24
+// hours after posting" under a traveler's own fresh review, since the client
+// has no exact timestamp (created_month is month-precision only) to work that
+// out any other way. Never persisted, never sent anywhere.
+const reviewedThisSession = new Set<string>();
+
+/** Was a review written or edited for this stop during the current app session? */
+export function wasReviewedThisSession(stopId: string): boolean {
+  return reviewedThisSession.has(stopId);
+}
+
+/**
+ * Create or update the signed-in user's one review for a stop.
+ * `upsert` on `(user_id, stop_id)` — the existing author update policy allows
+ * the update path once a row already exists.
+ */
+export async function upsertReview(
+  stopId: string,
+  input: ReviewInput,
+): Promise<{ error: string | null }> {
+  if (!supabaseConfigured) {
+    if (__DEV__) console.log(`[upsertReview] MOCK (reason: supabase not configured) id=${stopId}`);
+    return { error: 'Reviews are not available in this preview yet.' };
+  }
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user.id;
+  if (!userId) {
+    return { error: 'Sign in to write a review.' };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('reviews')
+      .upsert({ ...input, user_id: userId, stop_id: stopId }, { onConflict: 'user_id,stop_id' });
+    if (error) throw error;
+    if (__DEV__) console.log(`[upsertReview] LIVE Supabase: saved id=${stopId}`);
+    reviewedThisSession.add(stopId);
+    return { error: null };
+  } catch (e) {
+    if (__DEV__) console.warn(`[upsertReview] write failed id=${stopId}`, e);
+    return { error: 'Could not save your review. Check your connection and try again.' };
+  }
+}
+
+/** Delete the signed-in user's own review for a stop. */
+export async function deleteReview(stopId: string): Promise<{ error: string | null }> {
+  if (!supabaseConfigured) {
+    if (__DEV__) console.log(`[deleteReview] MOCK (reason: supabase not configured) id=${stopId}`);
+    return { error: 'Reviews are not available in this preview yet.' };
+  }
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user.id;
+  if (!userId) {
+    return { error: 'Sign in to manage your review.' };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('reviews')
+      .delete()
+      .eq('user_id', userId)
+      .eq('stop_id', stopId);
+    if (error) throw error;
+    if (__DEV__) console.log(`[deleteReview] LIVE Supabase: deleted id=${stopId}`);
+    return { error: null };
+  } catch (e) {
+    if (__DEV__) console.warn(`[deleteReview] delete failed id=${stopId}`, e);
+    return { error: 'Could not delete your review. Check your connection and try again.' };
+  }
+}
+
+/** Report another traveler's review via `report_review`. Idempotent server-side. */
+export async function reportReview(
+  reviewId: string,
+  reason: ReportReason,
+  note: string | null,
+): Promise<{ error: string | null }> {
+  if (!supabaseConfigured) {
+    if (__DEV__) console.log(`[reportReview] MOCK (reason: supabase not configured) reviewId=${reviewId}`);
+    return { error: 'Reporting is not available in this preview yet.' };
+  }
+  try {
+    const { error } = await supabase.rpc('report_review', {
+      p_review_id: reviewId,
+      p_reason: reason,
+      p_note: note,
+    });
+    if (error) throw error;
+    if (__DEV__) console.log(`[reportReview] LIVE Supabase: reported reviewId=${reviewId}`);
+    return { error: null };
+  } catch (e) {
+    if (__DEV__) console.warn(`[reportReview] RPC failed reviewId=${reviewId}`, e);
+    return { error: "Couldn't send your report. Check your connection and try again." };
+  }
+}
+
+/**
+ * Hide a single review for the caller only, via `hide_review`. Unlike a
+ * global moderation hide, this only affects what the reporting traveler sees
+ * going forward — it does not touch the review for anyone else.
+ */
+export async function hideReview(reviewId: string): Promise<{ error: string | null }> {
+  if (!supabaseConfigured) {
+    if (__DEV__) console.log(`[hideReview] MOCK (reason: supabase not configured) reviewId=${reviewId}`);
+    return { error: 'Hiding reviews is not available in this preview yet.' };
+  }
+  try {
+    const { error } = await supabase.rpc('hide_review', { p_review_id: reviewId });
+    if (error) throw error;
+    if (__DEV__) console.log(`[hideReview] LIVE Supabase: hidden reviewId=${reviewId}`);
+    return { error: null };
+  } catch (e) {
+    if (__DEV__) console.warn(`[hideReview] RPC failed reviewId=${reviewId}`, e);
+    return { error: "Couldn't hide that review. Check your connection and try again." };
+  }
 }
