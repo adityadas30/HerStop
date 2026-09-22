@@ -234,6 +234,9 @@ export default function StopDetailScreen() {
             ? ` · ${formatDistance(distanceMiles(coords, { latitude: stop.latitude, longitude: stop.longitude }))}`
             : ''}
         </Text>
+        <Text style={[styles.attribution, { color: colors.secondaryText }]}>
+          © OpenStreetMap contributors
+        </Text>
 
         {syncError && (
           <Text style={[styles.syncError, { color: colors.secondaryText }]}>{syncError}</Text>
@@ -369,6 +372,9 @@ const styles = StyleSheet.create({
   },
   syncError: {
     ...Typography.caption,
+  },
+  attribution: {
+    ...Typography.small,
   },
   tagsRow: {
     flexDirection: 'row',
