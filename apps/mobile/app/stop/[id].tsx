@@ -21,6 +21,7 @@ import { useAuth } from '@/contexts/auth';
 import { useSavedStops } from '@/contexts/saved-stops';
 import type { StopData } from '@/data/mock-stops';
 import { getStopById, getStopReviews, getStopReviewStats, hideReview, reportReview, wasReviewedThisSession } from '@/lib/api';
+import { distanceMiles, formatDistance, getCurrentCoords, type Coords } from '@/lib/location';
 import { reviewCountLabel, scoreStop } from '@/lib/scoring';
 import type { ReportReason, Review, ReviewStats } from '@/lib/types';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -66,6 +67,7 @@ export default function StopDetailScreen() {
   const [stop, setStop] = useState<StopData | null>(null);
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState<FeedbackState>(INITIAL_FEEDBACK);
+  const [coords, setCoords] = useState<Coords | null>(null);
   // Set when a guest taps save: what they wanted to save, held until they're back
   // from signing in.
   const [pendingSaveId, setPendingSaveId] = useState<string | null>(null);
@@ -75,6 +77,7 @@ export default function StopDetailScreen() {
       setStop(s);
       setLoading(false);
     });
+    getCurrentCoords().then(setCoords);
   }, [id]);
 
   const loadFeedback = useCallback(async (stopId: string) => {
@@ -225,7 +228,12 @@ export default function StopDetailScreen() {
 
         {/* Name + address */}
         <Text style={[styles.stopName, { color: colors.text }]}>{stop.name}</Text>
-        <Text style={[styles.address, { color: colors.secondaryText }]}>{stop.address}</Text>
+        <Text style={[styles.address, { color: colors.secondaryText }]}>
+          {stop.address}
+          {coords
+            ? ` · ${formatDistance(distanceMiles(coords, { latitude: stop.latitude, longitude: stop.longitude }))}`
+            : ''}
+        </Text>
 
         {syncError && (
           <Text style={[styles.syncError, { color: colors.secondaryText }]}>{syncError}</Text>

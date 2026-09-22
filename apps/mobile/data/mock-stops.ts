@@ -14,6 +14,8 @@ export interface StopData {
   tags: StopTag[];
   imageColor: string;
   categories: string[];
+  latitude: number;
+  longitude: number;
 }
 
 export interface FilterOption {
@@ -41,6 +43,8 @@ export const MOCK_STOPS: StopData[] = [
     address: '1420 Willow Creek Rd, Exit 42',
     imageColor: '#C9B8A8',
     categories: ['Gas', 'Restroom', 'Well Lit'],
+    latitude: 40.5642,
+    longitude: -74.2891,
     tags: [
       { label: 'Well Lit', icon: 'lightbulb.fill' },
       { label: 'Clean Restroom', icon: 'sparkles' },
@@ -52,6 +56,8 @@ export const MOCK_STOPS: StopData[] = [
     address: '780 Route 1 South, Woodbridge',
     imageColor: '#B8A898',
     categories: ['Gas', 'Open Now'],
+    latitude: 40.5573,
+    longitude: -74.2846,
     tags: [
       { label: 'Staffed 24/7', icon: 'person.fill' },
       { label: 'CCTV Monitored', icon: 'video.fill' },
@@ -63,6 +69,8 @@ export const MOCK_STOPS: StopData[] = [
     address: '55 Meridian Blvd, Newark',
     imageColor: '#8B9DAF',
     categories: ['Well Lit', 'Open Now'],
+    latitude: 40.7357,
+    longitude: -74.1724,
     tags: [
       { label: 'Safety Help Point', icon: 'shield.fill' },
       { label: 'High Visibility', icon: 'lightbulb.fill' },
@@ -74,6 +82,8 @@ export const MOCK_STOPS: StopData[] = [
     address: 'I-78 West, Mile Marker 34',
     imageColor: '#A8B5A3',
     categories: ['Restroom', 'Well Lit'],
+    latitude: 40.6684,
+    longitude: -74.6851,
     tags: [
       { label: 'Clean Restroom', icon: 'sparkles' },
       { label: 'Well Lit', icon: 'lightbulb.fill' },
@@ -86,6 +96,8 @@ export const MOCK_STOPS: StopData[] = [
     address: '2200 US-9, Old Bridge',
     imageColor: '#D4C1A8',
     categories: ['Gas', 'Restroom', 'Open Now', 'Well Lit'],
+    latitude: 40.3987,
+    longitude: -74.2654,
     tags: [
       { label: 'Well Lit', icon: 'lightbulb.fill' },
       { label: 'Clean Restroom', icon: 'sparkles' },
@@ -98,6 +110,8 @@ export const MOCK_STOPS: StopData[] = [
     address: '410 Harbor Blvd, Perth Amboy',
     imageColor: '#9BADB8',
     categories: ['Open Now'],
+    latitude: 40.5093,
+    longitude: -74.2652,
     tags: [
       { label: 'CCTV Monitored', icon: 'video.fill' },
     ],

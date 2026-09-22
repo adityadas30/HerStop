@@ -1,381 +1,610 @@
 [
   {
-    "id": "osm-way-1365688111",
-    "name": "Love's Travel Stop",
-    "address": "2400 East 200 North, Lafayette, IN 47905",
-    "latitude": 40.451915,
-    "longitude": -86.850101,
-    "categories": [],
-    "osm_type": "way",
-    "osm_id": 1365688111,
-    "osm_tags_used": [
-      "name",
-      "brand",
-      "highway",
-      "addr:housenumber",
-      "addr:street",
-      "addr:city",
-      "addr:state",
-      "addr:postcode"
-    ],
-    "address_source": "osm"
-  },
-  {
-    "id": "osm-way-571837327",
-    "name": "BP",
-    "address": "2888 Old State Road 25, Fairfield Township, IN 47905",
-    "latitude": 40.457984,
-    "longitude": -86.84621,
-    "categories": [
-      "Gas"
-    ],
-    "osm_type": "way",
-    "osm_id": 571837327,
-    "osm_tags_used": [
-      "name",
-      "brand",
-      "amenity",
-      "addr:housenumber",
-      "addr:street",
-      "addr:city",
-      "addr:state",
-      "addr:postcode"
-    ],
-    "address_source": "osm"
-  },
-  {
-    "id": "osm-way-283289437",
-    "name": "Speedway",
-    "address": "4325 South Street, Lafayette, IN 47905",
-    "latitude": 40.416983,
-    "longitude": -86.824681,
-    "categories": [
-      "Gas"
-    ],
-    "osm_type": "way",
-    "osm_id": 283289437,
-    "osm_tags_used": [
-      "name",
-      "brand",
-      "amenity",
-      "addr:housenumber",
-      "addr:street",
-      "addr:city",
-      "addr:state",
-      "addr:postcode"
-    ],
-    "address_source": "osm"
-  },
-  {
-    "id": "osm-node-12688099567",
-    "name": "Meijer",
-    "address": "SR 26, Lafayette, Indiana 47905",
-    "latitude": 40.416973,
-    "longitude": -86.813098,
-    "categories": [
-      "Gas"
-    ],
-    "osm_type": "node",
-    "osm_id": 12688099567,
-    "osm_tags_used": [
-      "name",
-      "brand",
-      "amenity"
-    ],
-    "address_source": "nominatim"
-  },
-  {
-    "id": "osm-way-1195033424",
-    "name": "Circle K",
-    "address": "6533 State Rd 38 E, Lafayette, IN 47905",
-    "latitude": 40.373709,
-    "longitude": -86.780225,
-    "categories": [
-      "Gas"
-    ],
-    "osm_type": "way",
-    "osm_id": 1195033424,
-    "osm_tags_used": [
-      "name",
-      "brand",
-      "amenity",
-      "addr:housenumber",
-      "addr:street",
-      "addr:city",
-      "addr:state",
-      "addr:postcode"
-    ],
-    "address_source": "osm"
-  },
-  {
-    "id": "osm-way-1196146349",
-    "name": "BP",
-    "address": "Yost Drive, Dayton, Indiana 47905",
-    "latitude": 40.374797,
-    "longitude": -86.777605,
-    "categories": [
-      "Gas"
-    ],
-    "osm_type": "way",
-    "osm_id": 1196146349,
-    "osm_tags_used": [
-      "name",
-      "brand",
-      "amenity"
-    ],
-    "address_source": "nominatim"
-  },
-  {
     "id": "osm-node-7759210731",
+    "source": "openstreetmap",
+    "source_id": "node/7759210731",
     "name": "BP",
     "address": "SR 28, Frankfort, Indiana",
-    "latitude": 40.261926,
-    "longitude": -86.650734,
+    "address_source": "nominatim_reverse_geocode",
+    "latitude": 40.2619256,
+    "longitude": -86.6507341,
     "categories": [
       "Gas"
     ],
-    "osm_type": "node",
-    "osm_id": 7759210731,
-    "osm_tags_used": [
-      "name",
-      "brand",
-      "amenity"
-    ],
-    "address_source": "nominatim"
+    "stop_type": "fuel"
   },
   {
-    "id": "osm-way-230775623",
-    "name": "Flying J Travel Center",
-    "address": "West Cox Avenue, Lebanon, Indiana 46052",
-    "latitude": 40.033082,
-    "longitude": -86.473193,
-    "categories": [],
-    "osm_type": "way",
-    "osm_id": 230775623,
-    "osm_tags_used": [
-      "name",
-      "brand",
-      "highway"
+    "id": "osm-node-9446063174",
+    "source": "openstreetmap",
+    "source_id": "node/9446063174",
+    "name": "Phillips 66",
+    "address": "3401 Georgetown Road, Indianapolis, IN, 46224",
+    "address_source": "osm_tags",
+    "latitude": 39.8169828,
+    "longitude": -86.2396817,
+    "categories": [
+      "Gas"
     ],
-    "address_source": "nominatim"
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-node-9451283725",
+    "source": "openstreetmap",
+    "source_id": "node/9451283725",
+    "name": "Speedway",
+    "address": "3350 Georgetown Road, Indianapolis, IN, 46224",
+    "address_source": "osm_tags",
+    "latitude": 39.816344,
+    "longitude": -86.2402954,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-way-1026932644",
+    "source": "openstreetmap",
+    "source_id": "way/1026932644",
+    "name": "Speedway",
+    "address": "5025 Lafayette Road, Indianapolis, IN, 46254",
+    "address_source": "osm_tags",
+    "latitude": 39.8438331,
+    "longitude": -86.2536881,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-node-9593031443",
+    "source": "openstreetmap",
+    "source_id": "node/9593031443",
+    "name": "Speedway",
+    "address": "1335 South Lebanon Street, Lebanon, IN, 46052",
+    "address_source": "osm_tags",
+    "latitude": 40.0363799,
+    "longitude": -86.470063,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-node-9605130354",
+    "source": "openstreetmap",
+    "source_id": "node/9605130354",
+    "name": "Speedway",
+    "address": "4830 West 38th Street, Indianapolis, IN, 46254",
+    "address_source": "osm_tags",
+    "latitude": 39.8243561,
+    "longitude": -86.2416216,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-node-9607781174",
+    "source": "openstreetmap",
+    "source_id": "node/9607781174",
+    "name": "Speedway",
+    "address": "3437 Lafayette Road, Indianapolis, IN, 46222",
+    "address_source": "osm_tags",
+    "latitude": 39.8184044,
+    "longitude": -86.2288793,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-node-11182190950",
+    "source": "openstreetmap",
+    "source_id": "node/11182190950",
+    "name": "Pilot",
+    "address": "West Cox Avenue, Lebanon, Indiana, 46052",
+    "address_source": "nominatim_reverse_geocode",
+    "latitude": 40.0323135,
+    "longitude": -86.4735067,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-node-11182191097",
+    "source": "openstreetmap",
+    "source_id": "node/11182191097",
+    "name": "McClure's",
+    "address": "Friend Way, Lebanon, Indiana, 46052",
+    "address_source": "nominatim_reverse_geocode",
+    "latitude": 40.048267,
+    "longitude": -86.4917028,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-node-11182191124",
+    "source": "openstreetmap",
+    "source_id": "node/11182191124",
+    "name": "Shell",
+    "address": "SR 32, Lebanon, Indiana, 46052",
+    "address_source": "nominatim_reverse_geocode",
+    "latitude": 40.046841,
+    "longitude": -86.4919335,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-node-11182191129",
+    "source": "openstreetmap",
+    "source_id": "node/11182191129",
+    "name": "BP",
+    "address": "SR 32, Lebanon, Indiana, 46052",
+    "address_source": "nominatim_reverse_geocode",
+    "latitude": 40.0468297,
+    "longitude": -86.4855042,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
   },
   {
     "id": "osm-node-11182191149",
+    "source": "openstreetmap",
+    "source_id": "node/11182191149",
     "name": "Country Mark Gas Station",
-    "address": "817 West South Street, Lebanon, IN 46052",
-    "latitude": 40.046409,
-    "longitude": -86.476222,
+    "address": "817 West South Street, Lebanon, IN, 46052",
+    "address_source": "osm_tags",
+    "latitude": 40.0464088,
+    "longitude": -86.4762224,
     "categories": [
       "Gas"
     ],
-    "osm_type": "node",
-    "osm_id": 11182191149,
-    "osm_tags_used": [
-      "name",
-      "amenity",
-      "addr:housenumber",
-      "addr:street",
-      "addr:city",
-      "addr:state",
-      "addr:postcode"
-    ],
-    "address_source": "osm"
+    "stop_type": "fuel"
   },
   {
-    "id": "osm-way-1545554017",
-    "name": "Wally's",
-    "address": "4155 Albert S. White Drive, Whitestown, IN 46075",
-    "latitude": 39.981809,
-    "longitude": -86.391202,
+    "id": "osm-node-11182191168",
+    "source": "openstreetmap",
+    "source_id": "node/11182191168",
+    "name": "Marathon",
+    "address": "West South Street, Lebanon, Indiana, 46071",
+    "address_source": "nominatim_reverse_geocode",
+    "latitude": 40.0469421,
+    "longitude": -86.4751978,
     "categories": [
       "Gas"
     ],
-    "osm_type": "way",
-    "osm_id": 1545554017,
-    "osm_tags_used": [
-      "name",
-      "brand",
-      "amenity",
-      "addr:housenumber",
-      "addr:street",
-      "addr:city",
-      "addr:state",
-      "addr:postcode"
-    ],
-    "address_source": "osm"
-  },
-  {
-    "id": "osm-way-225347315",
-    "name": "Love's Travel Stop",
-    "address": "4155 South Indianapolis Road, Whitestown, 46075",
-    "latitude": 39.979003,
-    "longitude": -86.395118,
-    "categories": [],
-    "osm_type": "way",
-    "osm_id": 225347315,
-    "osm_tags_used": [
-      "name",
-      "brand",
-      "highway",
-      "addr:housenumber",
-      "addr:street",
-      "addr:city",
-      "addr:postcode"
-    ],
-    "address_source": "osm"
-  },
-  {
-    "id": "osm-way-223165641",
-    "name": "TA",
-    "address": "5930 Whitestown Parkway, Whitestown, IN 46075-9801",
-    "latitude": 39.947865,
-    "longitude": -86.357541,
-    "categories": [],
-    "osm_type": "way",
-    "osm_id": 223165641,
-    "osm_tags_used": [
-      "name",
-      "brand",
-      "highway",
-      "addr:housenumber",
-      "addr:street",
-      "addr:city",
-      "addr:state",
-      "addr:postcode"
-    ],
-    "address_source": "osm"
-  },
-  {
-    "id": "osm-way-766083124",
-    "name": "GetGo",
-    "address": "7011 Whitestown Parkway, Zionsville, IN 46077",
-    "latitude": 39.948949,
-    "longitude": -86.335764,
-    "categories": [
-      "Gas"
-    ],
-    "osm_type": "way",
-    "osm_id": 766083124,
-    "osm_tags_used": [
-      "name",
-      "brand",
-      "amenity",
-      "addr:housenumber",
-      "addr:street",
-      "addr:city",
-      "addr:state",
-      "addr:postcode"
-    ],
-    "address_source": "osm"
-  },
-  {
-    "id": "osm-way-1026315492",
-    "name": "Speedway",
-    "address": "6315 West 56th Street, Indianapolis, IN 46254",
-    "latitude": 39.852486,
-    "longitude": -86.271486,
-    "categories": [
-      "Gas"
-    ],
-    "osm_type": "way",
-    "osm_id": 1026315492,
-    "osm_tags_used": [
-      "name",
-      "brand",
-      "amenity",
-      "addr:housenumber",
-      "addr:street",
-      "addr:city",
-      "addr:state",
-      "addr:postcode"
-    ],
-    "address_source": "osm"
+    "stop_type": "fuel"
   },
   {
     "id": "osm-node-12687832610",
+    "source": "openstreetmap",
+    "source_id": "node/12687832610",
     "name": "Meijer",
-    "address": "5347 Pike Plaza Road, Indianapolis, Indiana 46254",
-    "latitude": 39.828969,
+    "address": "Pike Plaza Road, Indianapolis, Indiana, 46254",
+    "address_source": "nominatim_reverse_geocode",
+    "latitude": 39.8289685,
     "longitude": -86.253705,
     "categories": [
       "Gas"
     ],
-    "osm_type": "node",
-    "osm_id": 12687832610,
-    "osm_tags_used": [
-      "name",
-      "brand",
-      "amenity"
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-node-12688099567",
+    "source": "openstreetmap",
+    "source_id": "node/12688099567",
+    "name": "Meijer",
+    "address": "SR 26, Lafayette, Indiana, 47905",
+    "address_source": "nominatim_reverse_geocode",
+    "latitude": 40.4169728,
+    "longitude": -86.8130985,
+    "categories": [
+      "Gas"
     ],
-    "address_source": "nominatim"
+    "stop_type": "fuel"
   },
   {
     "id": "osm-way-220710454",
+    "source": "openstreetmap",
+    "source_id": "way/220710454",
     "name": "Admiral Petroleum",
-    "address": "3406 Lafayette Road, Indianapolis, IN 46222",
-    "latitude": 39.817079,
-    "longitude": -86.228673,
+    "address": "3406 Lafayette Road, Indianapolis, IN, 46222",
+    "address_source": "osm_tags",
+    "latitude": 39.8170788,
+    "longitude": -86.2286727,
     "categories": [
       "Gas"
     ],
-    "osm_type": "way",
-    "osm_id": 220710454,
-    "osm_tags_used": [
-      "name",
-      "brand",
-      "amenity",
-      "addr:housenumber",
-      "addr:street",
-      "addr:city",
-      "addr:state",
-      "addr:postcode"
-    ],
-    "address_source": "osm"
+    "stop_type": "fuel"
   },
   {
-    "id": "osm-way-951355881",
-    "name": "Phillips 66",
-    "address": "3406 North Capitol Avenue, Indianapolis, IN 46208",
-    "latitude": 39.817583,
-    "longitude": -86.161915,
+    "id": "osm-way-223165641",
+    "source": "openstreetmap",
+    "source_id": "way/223165641",
+    "name": "TA",
+    "address": "5930 Whitestown Parkway, Whitestown, IN, 46075-9801",
+    "address_source": "osm_tags",
+    "latitude": 39.9478645,
+    "longitude": -86.3575415,
+    "categories": [],
+    "stop_type": "services"
+  },
+  {
+    "id": "osm-way-225347312",
+    "source": "openstreetmap",
+    "source_id": "way/225347312",
+    "name": "Love's",
+    "address": "4155 South Indianapolis Road, Whitestown, 46075",
+    "address_source": "osm_tags",
+    "latitude": 39.9791264,
+    "longitude": -86.3953228,
     "categories": [
       "Gas"
     ],
-    "osm_type": "way",
-    "osm_id": 951355881,
-    "osm_tags_used": [
-      "name",
-      "brand",
-      "amenity",
-      "addr:housenumber",
-      "addr:street",
-      "addr:city",
-      "addr:state",
-      "addr:postcode"
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-way-225347315",
+    "source": "openstreetmap",
+    "source_id": "way/225347315",
+    "name": "Love's Travel Stop",
+    "address": "4155 South Indianapolis Road, Whitestown, 46075",
+    "address_source": "osm_tags",
+    "latitude": 39.9790028,
+    "longitude": -86.3951179,
+    "categories": [],
+    "stop_type": "services"
+  },
+  {
+    "id": "osm-way-230775623",
+    "source": "openstreetmap",
+    "source_id": "way/230775623",
+    "name": "Flying J Travel Center",
+    "address": "West Cox Avenue, Lebanon, Indiana, 46052",
+    "address_source": "nominatim_reverse_geocode",
+    "latitude": 40.0330816,
+    "longitude": -86.4731929,
+    "categories": [],
+    "stop_type": "services"
+  },
+  {
+    "id": "osm-way-259017890",
+    "source": "openstreetmap",
+    "source_id": "way/259017890",
+    "name": "Circle K",
+    "address": "West 16th Street, Indianapolis, Indiana, 46202",
+    "address_source": "nominatim_reverse_geocode",
+    "latitude": 39.7880897,
+    "longitude": -86.159013,
+    "categories": [
+      "Gas"
     ],
-    "address_source": "osm"
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-way-283289437",
+    "source": "openstreetmap",
+    "source_id": "way/283289437",
+    "name": "Speedway",
+    "address": "4325 South Street, Lafayette, IN, 47905",
+    "address_source": "osm_tags",
+    "latitude": 40.4169832,
+    "longitude": -86.8246811,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-way-396243871",
+    "source": "openstreetmap",
+    "source_id": "way/396243871",
+    "name": "Shell",
+    "address": "North Illinois Street, Indianapolis, Indiana, 46208",
+    "address_source": "nominatim_reverse_geocode",
+    "latitude": 39.810429,
+    "longitude": -86.1593421,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
   },
   {
     "id": "osm-way-432174373",
+    "source": "openstreetmap",
+    "source_id": "way/432174373",
     "name": "Phillips 66",
-    "address": "2202 North Delaware Street, Indianapolis, IN 46205",
-    "latitude": 39.797618,
-    "longitude": -86.153768,
+    "address": "2202 North Delaware Street, Indianapolis, IN, 46205",
+    "address_source": "osm_tags",
+    "latitude": 39.7976178,
+    "longitude": -86.1537682,
     "categories": [
       "Gas"
     ],
-    "osm_type": "way",
-    "osm_id": 432174373,
-    "osm_tags_used": [
-      "name",
-      "brand",
-      "amenity",
-      "addr:housenumber",
-      "addr:street",
-      "addr:city",
-      "addr:state",
-      "addr:postcode"
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-way-486599881",
+    "source": "openstreetmap",
+    "source_id": "way/486599881",
+    "name": "FAMILY EXPRESS",
+    "address": "Old State Road 25, Indiana, 47905",
+    "address_source": "nominatim_reverse_geocode",
+    "latitude": 40.4621176,
+    "longitude": -86.8406045,
+    "categories": [
+      "Gas"
     ],
-    "address_source": "osm"
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-way-505673877",
+    "source": "openstreetmap",
+    "source_id": "way/505673877",
+    "name": "Meijer",
+    "address": "Main Street, Indiana, 46077",
+    "address_source": "nominatim_reverse_geocode",
+    "latitude": 39.9498489,
+    "longitude": -86.344389,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-way-571837327",
+    "source": "openstreetmap",
+    "source_id": "way/571837327",
+    "name": "BP",
+    "address": "2888 Old State Road 25, Fairfield Township, IN, 47905",
+    "address_source": "osm_tags",
+    "latitude": 40.4579836,
+    "longitude": -86.8462104,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-way-716827762",
+    "source": "openstreetmap",
+    "source_id": "way/716827762",
+    "name": "Luke",
+    "address": "South Street, Lafayette, Indiana, 47905",
+    "address_source": "nominatim_reverse_geocode",
+    "latitude": 40.4170125,
+    "longitude": -86.8241275,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-way-721725771",
+    "source": "openstreetmap",
+    "source_id": "way/721725771",
+    "name": "Shell",
+    "address": "South Street, Lafayette, Indiana, 47905",
+    "address_source": "nominatim_reverse_geocode",
+    "latitude": 40.4181168,
+    "longitude": -86.8252993,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-way-760556958",
+    "source": "openstreetmap",
+    "source_id": "way/760556958",
+    "name": "Sam's Club",
+    "address": "South Creasy Lane, Lafayette, Indiana, 47905",
+    "address_source": "nominatim_reverse_geocode",
+    "latitude": 40.4152295,
+    "longitude": -86.8384065,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-way-766083124",
+    "source": "openstreetmap",
+    "source_id": "way/766083124",
+    "name": "GetGo",
+    "address": "7011 Whitestown Parkway, Zionsville, IN, 46077",
+    "address_source": "osm_tags",
+    "latitude": 39.9489491,
+    "longitude": -86.335764,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-way-939421660",
+    "source": "openstreetmap",
+    "source_id": "way/939421660",
+    "name": "Marathon",
+    "address": "West 29th Street, Indianapolis, Indiana, 46208",
+    "address_source": "nominatim_reverse_geocode",
+    "latitude": 39.8087054,
+    "longitude": -86.1735699,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-way-951355881",
+    "source": "openstreetmap",
+    "source_id": "way/951355881",
+    "name": "Phillips 66",
+    "address": "3406 North Capitol Avenue, Indianapolis, IN, 46208",
+    "address_source": "osm_tags",
+    "latitude": 39.8175832,
+    "longitude": -86.1619152,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-way-992529755",
+    "source": "openstreetmap",
+    "source_id": "way/992529755",
+    "name": "Speedway",
+    "address": "973 Park East Boulevard, Lafayette, IN",
+    "address_source": "osm_tags",
+    "latitude": 40.4039159,
+    "longitude": -86.8272722,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-way-1026315492",
+    "source": "openstreetmap",
+    "source_id": "way/1026315492",
+    "name": "Speedway",
+    "address": "6315 West 56th Street, Indianapolis, IN, 46254",
+    "address_source": "osm_tags",
+    "latitude": 39.852486,
+    "longitude": -86.2714856,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-way-1080719782",
+    "source": "openstreetmap",
+    "source_id": "way/1080719782",
+    "name": "Shell",
+    "address": "6378 Crane Drive, Whitestown, IN, 46075",
+    "address_source": "osm_tags",
+    "latitude": 39.9477394,
+    "longitude": -86.3505816,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-way-1195033424",
+    "source": "openstreetmap",
+    "source_id": "way/1195033424",
+    "name": "Circle K",
+    "address": "6533 State Rd 38 E, Lafayette, IN, 47905",
+    "address_source": "osm_tags",
+    "latitude": 40.3737094,
+    "longitude": -86.780225,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-way-1195034252",
+    "source": "openstreetmap",
+    "source_id": "way/1195034252",
+    "name": "Beyond6",
+    "address": "290 Yost Drive, Lafayette, IN, 47905",
+    "address_source": "osm_tags",
+    "latitude": 40.3748654,
+    "longitude": -86.7788883,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-way-1196146349",
+    "source": "openstreetmap",
+    "source_id": "way/1196146349",
+    "name": "BP",
+    "address": "Yost Drive, Dayton, Indiana, 47905",
+    "address_source": "nominatim_reverse_geocode",
+    "latitude": 40.3747975,
+    "longitude": -86.7776049,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-way-1228855560",
+    "source": "openstreetmap",
+    "source_id": "way/1228855560",
+    "name": "Circle K",
+    "address": "Whitestown Parkway, Indiana, 46075",
+    "address_source": "nominatim_reverse_geocode",
+    "latitude": 39.9495997,
+    "longitude": -86.3478387,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-way-1365688111",
+    "source": "openstreetmap",
+    "source_id": "way/1365688111",
+    "name": "Love's Travel Stop",
+    "address": "2400 East 200 North, Lafayette, IN, 47905",
+    "address_source": "osm_tags",
+    "latitude": 40.451915,
+    "longitude": -86.8501007,
+    "categories": [],
+    "stop_type": "services"
+  },
+  {
+    "id": "osm-way-1365688113",
+    "source": "openstreetmap",
+    "source_id": "way/1365688113",
+    "name": "Love's",
+    "address": "2400 East 200 North, Lafayette, IN, 47905",
+    "address_source": "osm_tags",
+    "latitude": 40.4530195,
+    "longitude": -86.8502335,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-way-1384580429",
+    "source": "openstreetmap",
+    "source_id": "way/1384580429",
+    "name": "Marathon",
+    "address": "State Road 267, Indiana, 46075",
+    "address_source": "nominatim_reverse_geocode",
+    "latitude": 39.9783837,
+    "longitude": -86.3990443,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
+  },
+  {
+    "id": "osm-way-1545554017",
+    "source": "openstreetmap",
+    "source_id": "way/1545554017",
+    "name": "Wally's",
+    "address": "4155 Albert S. White Drive, Whitestown, IN, 46075",
+    "address_source": "osm_tags",
+    "latitude": 39.9818087,
+    "longitude": -86.3912019,
+    "categories": [
+      "Gas"
+    ],
+    "stop_type": "fuel"
   }
 ]

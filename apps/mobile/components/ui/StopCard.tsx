@@ -6,6 +6,7 @@ import { Colors, Radius, Shadows, Spacing, Typography } from '@/constants/theme'
 import { useSavedStops } from '@/contexts/saved-stops';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { StopData } from '@/data/mock-stops';
+import { formatDistance } from '@/lib/location';
 import { reviewCountLabel, scoreStop } from '@/lib/scoring';
 import type { ReviewStats } from '@/lib/types';
 
@@ -16,10 +17,13 @@ interface StopCardProps {
   /** This stop's aggregate review stats. Omit (or undefined) shows Limited Data,
    * which is what a screen that hasn't fetched stats yet should pass. */
   stats?: ReviewStats;
+  /** Real distance from the device's current position, in miles. Omit
+   * (or undefined) hides the distance line rather than showing a guess. */
+  distanceMiles?: number;
   onPress?: () => void;
 }
 
-export function StopCard({ stop, stats, onPress }: StopCardProps) {
+export function StopCard({ stop, stats, distanceMiles, onPress }: StopCardProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const { isSaved, toggleSaved } = useSavedStops();
@@ -62,6 +66,12 @@ export function StopCard({ stop, stats, onPress }: StopCardProps) {
           <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>
             {stop.name}
           </Text>
+
+          {distanceMiles !== undefined && (
+            <Text style={[styles.distance, { color: colors.secondaryText }]}>
+              {formatDistance(distanceMiles)}
+            </Text>
+          )}
 
           {/* Tags */}
           <View style={styles.tagsRow}>
@@ -111,6 +121,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   reviewLine: {
+    ...Typography.caption,
+  },
+  distance: {
     ...Typography.caption,
   },
   title: {

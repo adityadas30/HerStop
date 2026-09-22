@@ -115,6 +115,36 @@ Flagging clearly rather than quietly rewriting a shared branch.
    approval; the branch is backed up on origin but not merged).
 
 ## Log
+- **2026-09-22** — **Real stop-data pipeline built; live DB still has the 6 fictional rows
+  (founder action needed).** Reality check first: live `stops` (anon-key read, `supabase:check`)
+  still returns the 6 fictional dev-seed rows — `003` and `004` were never applied, despite
+  `004`'s commit message. No gas-station/rest-area/crime API was wired into app code anywhere;
+  the "18 real stops" from 09-15 was a one-time hand-run Overpass+Nominatim pull with no
+  ingestion code committed. Explore had no location query (fetched all stops, client-side text
+  filter only) and no distance calc — `expo-location` wasn't even a dependency.
+  Built the missing pipeline: `apps/mobile/scripts/ingest-osm-stops.mjs` (real, re-runnable —
+  Overpass API → normalize → dedupe (~300m radius, drops disused/abandoned/under-construction) →
+  Nominatim reverse-geocode fallback → idempotent SQL upsert), run live against the I-65 corridor
+  (44 real stops obtained, 20 reverse-geocoded, written to
+  `docs/data/osm-i65-west-lafayette-indianapolis/`). `docs/migrations/005_stops_provider_fields.sql`
+  adds `source`/`source_id`/`stop_type`/`updated_at`/`safety_context` (nullable, reserved — not
+  populated) to `stops`; `006_ingest_real_stops.sql` is the generated upsert, supersedes `004`
+  (README updated, apply order noted: `001→002→003→005→006`, skip `004`). Added
+  `apps/mobile/lib/location.ts` (foreground `expo-location`, one-shot, never stored/logged/sent —
+  haversine distance) and wired it into Explore (sorts by real distance once permission is
+  granted, subtitle says so honestly, no location = no fake sort) and stop detail (real distance
+  in the address line). `StopData`/mock stops/`dbToStopData` carry `latitude`/`longitude` through
+  end to end. **Crime data: confirmed zero code, zero schema, zero API anywhere** — `lib/scoring.ts`
+  already says so in its own comment. Added `safety_context` column as a reserved boundary only;
+  did not build crime ingestion (no provider chosen, not just a missing key — a product decision
+  the founder should make, e.g. which jurisdiction-specific crime API/dataset to use).
+  `tsc` ✅ `lint` ✅ guard suite ✅ 29/29 `expo export --platform ios` ✅ (1366 modules, clean).
+  Simulator verification blocked this session: `xcrun`/`simctl` refuse to run until someone runs
+  `sudo xcodebuild -license` interactively (needs a password an agent can't supply) — not the
+  09-17 `simctl` timeout, a different, new blocker. **Founder action needed:** run `005` then `006`
+  in the Supabase SQL Editor (after `003`, which was already pending) to make the app show real
+  stops; then accept the Xcode license (`sudo xcodebuild -license`) so Simulator verification
+  works again for future sessions.
 - **2026-09-17** — **Reviews merged; fabricated data is gone from the app.**
   `community-reviews` app side merged (`1f7ae94`): review read/write, report + per-review hide,
   `lib/scoring.ts` labels (Recommended Stop / Good Option / Use Caution / Limited Data) computed
