@@ -13,7 +13,8 @@
       "supportsTablet": false,
       "buildNumber": "1",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "HerStop uses your location to sort nearby stops by real distance. Your location is never stored or sent anywhere."
       }
     },
     "android": {
@@ -44,7 +45,13 @@
           }
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "HerStop uses your location to sort nearby stops by real distance. Your location is never stored or sent anywhere."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -19,6 +19,8 @@ function dbToStopData(row: Stop): StopData {
     })),
     imageColor: row.image_color,
     categories: row.categories,
+    latitude: row.latitude,
+    longitude: row.longitude,
   };
 }
 

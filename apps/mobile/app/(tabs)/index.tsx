@@ -10,6 +10,7 @@ import { StopCard } from '@/components/ui/StopCard';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 import { FILTERS, MOCK_STOPS, type StopData } from '@/data/mock-stops';
 import { getStopReviewStats, getStops } from '@/lib/api';
+import { distanceMiles, getCurrentCoords, type Coords } from '@/lib/location';
 import type { ReviewStats } from '@/lib/types';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -23,6 +24,10 @@ export default function DiscoverScreen() {
   const [stats, setStats] = useState<Map<string, ReviewStats>>(new Map());
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilters, setSelectedFilters] = useState<Set<string>>(new Set());
+  // Null until a real device fix comes back (or permission is denied, in which
+  // case it stays null forever — the list just isn't distance-sorted). Never
+  // guessed, never defaulted to a fake coordinate.
+  const [coords, setCoords] = useState<Coords | null>(null);
 
   useEffect(() => {
     getStops().then((loadedStops) => {
@@ -32,6 +37,7 @@ export default function DiscoverScreen() {
         setStats(loadedStats);
       });
     });
+    getCurrentCoords().then(setCoords);
   }, []);
 
   function toggleFilter(label: string) {
@@ -42,6 +48,18 @@ export default function DiscoverScreen() {
       return next;
     });
   }
+
+  // Real distance from the device's current position to each stop's real
+  // coordinates — undefined (not 0, not a guess) for every stop until coords
+  // are available.
+  const distances = useMemo(() => {
+    const next = new Map<string, number>();
+    if (!coords) return next;
+    for (const stop of stops) {
+      next.set(stop.id, distanceMiles(coords, { latitude: stop.latitude, longitude: stop.longitude }));
+    }
+    return next;
+  }, [stops, coords]);
 
   const filteredStops = useMemo(() => {
     let result = stops;
@@ -59,8 +77,17 @@ export default function DiscoverScreen() {
       result = result.filter((s) => s.categories.some((c) => selectedFilters.has(c)));
     }
 
+    // Sort by real distance once we have a real position; otherwise leave the
+    // catalog's own order (alphabetical from the `stops` query) alone rather
+    // than inventing an order that looks location-aware but isn't.
+    if (coords) {
+      result = [...result].sort(
+        (a, b) => (distances.get(a.id) ?? Infinity) - (distances.get(b.id) ?? Infinity),
+      );
+    }
+
     return result;
-  }, [stops, searchQuery, selectedFilters]);
+  }, [stops, searchQuery, selectedFilters, coords, distances]);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -127,9 +154,11 @@ export default function DiscoverScreen() {
             Recommended near you
           </Text>
           <Text style={[styles.sectionSubtitle, { color: colors.secondaryText }]}>
-            {filteredStops.length === stops.length
-              ? 'Browse stops and recent traveler feedback'
-              : `${filteredStops.length} stop${filteredStops.length !== 1 ? 's' : ''} found`}
+            {filteredStops.length !== stops.length
+              ? `${filteredStops.length} stop${filteredStops.length !== 1 ? 's' : ''} found`
+              : coords
+                ? 'Sorted by distance from you'
+                : 'Browse stops and recent traveler feedback'}
           </Text>
         </View>
 
@@ -141,6 +170,7 @@ export default function DiscoverScreen() {
                 key={stop.id}
                 stop={stop}
                 stats={stats.get(stop.id)}
+                distanceMiles={distances.get(stop.id)}
                 onPress={() => router.push(`/stop/${stop.id}`)}
               />
             ))}
