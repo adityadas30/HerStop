@@ -184,6 +184,11 @@ export default function DiscoverScreen() {
             </Text>
           </View>
         )}
+
+        {/* ── OSM attribution (ODbL requires this wherever the data is shown) ── */}
+        <Text style={[styles.attribution, { color: colors.secondaryText }]}>
+          © OpenStreetMap contributors
+        </Text>
       </ScrollView>
 
       {/* ── Journey Shield (floating) ── */}
@@ -283,6 +288,13 @@ const styles = StyleSheet.create({
   emptyBody: {
     ...Typography.body,
     textAlign: 'center' as const,
+  },
+
+  // Attribution
+  attribution: {
+    ...Typography.small,
+    textAlign: 'center' as const,
+    marginTop: Spacing.lg,
   },
 
   // Shield
