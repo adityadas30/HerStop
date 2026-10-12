@@ -28,6 +28,18 @@ export default function RootLayout() {
               name="review/[stopId]"
               options={{ presentation: 'modal', title: 'Write a Review' }}
             />
+            <Stack.Screen
+              name="legal/privacy"
+              options={{ title: 'Privacy Policy', headerBackTitle: 'Back' }}
+            />
+            <Stack.Screen
+              name="legal/support"
+              options={{ title: 'Support', headerBackTitle: 'Back' }}
+            />
+            <Stack.Screen
+              name="legal/safety-disclosure"
+              options={{ title: 'Safety Disclosure', headerBackTitle: 'Back' }}
+            />
           </Stack>
           <StatusBar style="auto" />
         </SavedStopsProvider>
