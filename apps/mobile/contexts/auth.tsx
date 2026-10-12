@@ -1,6 +1,7 @@
 import type { Session, User } from '@supabase/supabase-js';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import { deleteMyAccount } from '@/lib/account';
 import * as auth from '@/lib/auth';
 
 interface AuthContextValue {
@@ -13,6 +14,8 @@ interface AuthContextValue {
   sendOtp: (email: string) => Promise<{ error: string | null }>;
   verifyOtp: (email: string, token: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  /** Permanently delete the account. On success the user is back to guest state. */
+  deleteAccount: () => Promise<{ error: string | null }>;
 }
 
 const AuthContext = createContext<AuthContextValue>({
@@ -23,6 +26,7 @@ const AuthContext = createContext<AuthContextValue>({
   sendOtp: async () => ({ error: 'Auth not ready yet' }),
   verifyOtp: async () => ({ error: 'Auth not ready yet' }),
   signOut: async () => {},
+  deleteAccount: async () => ({ error: 'Auth not ready yet' }),
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -64,6 +68,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
   }, []);
 
+  // Saved stops clear themselves: SavedStopsProvider watches the user id and
+  // empties its list the moment the session becomes null.
+  const deleteAccount = useCallback(async () => {
+    const { error } = await deleteMyAccount();
+    if (!error) setSession(null);
+    return { error };
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       session,
@@ -73,8 +85,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       sendOtp,
       verifyOtp,
       signOut,
+      deleteAccount,
     }),
-    [session, loading, sendOtp, verifyOtp, signOut],
+    [session, loading, sendOtp, verifyOtp, signOut, deleteAccount],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

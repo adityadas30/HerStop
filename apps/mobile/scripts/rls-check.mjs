@@ -354,6 +354,36 @@ await assert('anonymous SELECT on banned_users returns 0 rows', async () => {
   return { pass: false, detail: `HTTP 200 but returned ${rows.length} row(s) — RLS is not restricting anon reads!` };
 });
 
+// 12. Anonymous calling delete_my_account is rejected — migration 007. The
+//     function is SECURITY DEFINER and deletes auth.users rows, so anon
+//     having EXECUTE would be a critical hole. Expect permission denied
+//     (401/403) or, because PostgREST hides functions the role can't run,
+//     a PGRST202 404. Even if the grant regressed, anon has no auth.uid()
+//     so the function would raise "not signed in" and delete nothing.
+await assert('anonymous calling delete_my_account is rejected', async () => {
+  const res = await fetch(`${url}/rest/v1/rpc/delete_my_account`, {
+    method: 'POST',
+    headers: { ...H, 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  const body = await res.text().catch(() => '');
+  if (res.status === 401 || res.status === 403) {
+    return { pass: true, detail: `HTTP ${res.status} — permission denied (no execute grant for anon)` };
+  }
+  if (isMissingSchemaObject(res.status, body)) {
+    // Anon can't execute it either way: not applied, or applied with no anon
+    // grant (PostgREST hides functions the role can't run). Say so plainly.
+    return {
+      pass: true,
+      detail: `HTTP ${res.status} PGRST202 — anon cannot call it (either not applied yet, or applied with no anon EXECUTE grant; this probe cannot tell which)`,
+    };
+  }
+  if (res.ok) {
+    return { pass: false, detail: `HTTP ${res.status} — anon call was ACCEPTED. Revoke execute from anon immediately!` };
+  }
+  return { pass: false, detail: `HTTP ${res.status} — expected 401/403: ${body.slice(0, 150)}` };
+});
+
 console.log(`→ RLS check against: ${url.replace(/^https?:\/\//, '')}\n`);
 for (const r of results) {
   console.log(`${r.pass ? '✅ PASS' : '❌ FAIL'} — ${r.name}`);
