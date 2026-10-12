@@ -1,42 +1,39 @@
-# TestFlight release — founder steps
+# TestFlight release checklist
 
-EAS Build is approved. `eas submit` is **not** — get founder sign-off before running it.
-All steps below need the founder's Apple/EAS logins; an agent cannot do these.
+EAS Build is approved. `eas submit` is **not**: get founder sign-off before running it.
+Agents cannot do the founder steps (they need Apple/EAS/Supabase logins).
 
-## One-time setup (needs Apple Developer + EAS login)
-1. `eas login` — log in with the EAS/Expo account.
-2. Confirm Apple Developer Program membership (needed for a bundle ID + TestFlight).
-3. From `apps/mobile/`: `eas init` — links this app to an EAS project (writes a project ID
-   into `app.json`/`app.config`; review before committing).
-4. Set the two client env vars as **EAS environment variables** (not committed to git):
+## Done by code (in repo)
+- [x] `apps/mobile/eas.json`: `preview` (internal distribution, device build, `environment: preview`) and `production` (`environment: production`, `autoIncrement`) profiles; `appVersionSource: remote`; `submit.production` intentionally empty.
+- [x] iOS privacy manifest in `app.json` → `ios.privacyManifests` (sources in `app-store-privacy.md`).
+- [x] `ITSAppUsesNonExemptEncryption: false`, location permission string, bundle ID `com.adityadas.herstop`, iPhone-only.
+- [x] In-app privacy, support, safety disclosure screens and in-app account deletion.
+- [x] App Store privacy-label answers and draft listing copy: `app-store-privacy.md`.
+- [x] No secrets in repo; only the public anon key is ever used by the client.
+- [ ] Release builds without mock stops (t6) and Sentry (t9): in progress on other tasks; confirm merged before building.
+
+## Founder steps, in order
+1. **Restore the Supabase project** `xnkjqcygzjlspeagcoal` (currently inactive).
+2. **Apply migrations** per `docs/migrations` runbook: 003 → 005 → 006 → 007 (007 = account deletion). Do not run 004. Run `npm run rls:check` and `npm run supabase:check` from `apps/mobile`.
+3. **Apple Developer Program** membership active (bundle ID + TestFlight).
+4. `eas login`, then from `apps/mobile/`: `eas init` (writes the project ID into app config; review before committing).
+5. **Set EAS environment variables** (EAS cloud builds do not see your local `.env`; without them the build has no backend):
    - `EXPO_PUBLIC_SUPABASE_URL`
-   - `EXPO_PUBLIC_SUPABASE_ANON_KEY` — this is the public anon key, safe to expose in a
-     client bundle by design. Never set any other, more privileged Supabase key here or
-     anywhere in app code/env — mobile only ever uses the public anon key.
-   - `eas env:create --scope project --name EXPO_PUBLIC_SUPABASE_URL --value <url> --environment production`
-   - repeat for the anon key. EAS cloud builds don't see your local gitignored `.env`, so
-     this step is required or the app will silently fall back to mock data in the build.
-
-## Build
-```
-eas build -p ios --profile production
-```
-Uses the `production` profile in `eas.json` (`autoIncrement: true`, so EAS bumps the build
-number for you each run — no need to hand-edit `ios.buildNumber` in `app.json`).
-
-Use `eas build -p ios --profile preview` for an internal-distribution build to test on a
-personal device before a TestFlight submission.
-
-## Submit (requires founder approval first)
-```
-eas submit -p ios --profile production
-```
-Needs an App Store Connect API key or Apple ID + app-specific password, entered interactively
-or configured under `submit.production` in `eas.json` — left empty in this repo on purpose.
-Do not add Apple IDs or API keys to `eas.json` without the founder present.
+   - `EXPO_PUBLIC_SUPABASE_ANON_KEY` (public anon key only; never any privileged key)
+   - later, when Sentry lands: `EXPO_PUBLIC_SENTRY_DSN`
+   ```
+   eas env:create --name EXPO_PUBLIC_SUPABASE_URL --value <url> --environment preview --visibility plaintext
+   eas env:create --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value <anon-key> --environment preview --visibility plaintext
+   ```
+   Repeat with `--environment production`. (Flags per current EAS CLI; check `eas env:create --help`.)
+6. **Resend SMTP** in Supabase Auth settings so one-time codes reach outside testers (the default Supabase mailer is rate-limited and for team members only).
+7. **Host privacy policy + support page**, set a real support email (`constants/app-info.ts`, `legal-content.ts`, `privacy-policy.md`). See `app-store-privacy.md` → URLs.
+8. **Preview build** and test on a device: `eas build -p ios --profile preview`. Check sign-in, Explore with real data, review/save, account deletion.
+9. **Production build**: `eas build -p ios --profile production` (build number auto-increments).
+10. **App Store Connect**: create the app, enter privacy answers and listing copy from `app-store-privacy.md`, add a reviewer test account (never commit credentials).
+11. **Submit** (founder approval first): `eas submit -p ios --profile production`. Needs an App Store Connect API key or Apple ID entered interactively. Do not put Apple IDs or keys in `eas.json`.
+12. Add testers in TestFlight.
 
 ## Notes
-- `ios.bundleIdentifier` is `com.adityadas.herstop`, `supportsTablet` is `false` (iPhone-only v1).
-- No `development` build profile — `expo-dev-client` isn't installed yet.
-- No secrets live in this repo; the anon key is public by design but still only ever
-  set via EAS environment variables or a local gitignored `.env`.
+- No `development` profile: `expo-dev-client` isn't installed.
+- Simulator builds are not produced by `preview` (`ios.simulator: false`).
