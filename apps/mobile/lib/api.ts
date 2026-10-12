@@ -28,11 +28,26 @@ function dbToStopData(row: Stop): StopData {
 // Public API — stops
 // ---------------------------------------------------------------------------
 
-/** Fetch all stops. Queries Supabase; falls back to mock data on error/empty. */
-export async function getStops(): Promise<StopData[]> {
+export type StopsResult = { stops: StopData[]; error: string | null };
+export type StopResult = { stop: StopData | null; status: 'ok' | 'not_found' | 'error' };
+
+const STOPS_LOAD_ERROR = "Couldn't load stops. Check your connection and try again.";
+
+/**
+ * Fetch all stops from Supabase.
+ *
+ * `error` is non-null only for a real failure (not configured, network, RLS…);
+ * an empty `stops` with `error: null` means the catalog is genuinely empty.
+ * The fictional MOCK_STOPS fallback exists for development only — in a release
+ * build a failure is surfaced, never replaced with invented places.
+ */
+export async function getStops(): Promise<StopsResult> {
   if (!supabaseConfigured) {
-    if (__DEV__) console.log('[getStops] MOCK fallback (reason: supabase not configured)');
-    return MOCK_STOPS;
+    if (__DEV__) {
+      console.log('[getStops] MOCK fallback (reason: supabase not configured)');
+      return { stops: MOCK_STOPS, error: null };
+    }
+    return { stops: [], error: STOPS_LOAD_ERROR };
   }
   try {
     const { data, error } = await supabase.from('stops').select('*').order('name');
@@ -40,37 +55,60 @@ export async function getStops(): Promise<StopData[]> {
     if (error) throw error;
     if (data && data.length > 0) {
       if (__DEV__) console.log(`[getStops] LIVE Supabase: ${data.length} rows`);
-      return (data as Stop[]).map(dbToStopData);
+      return { stops: (data as Stop[]).map(dbToStopData), error: null };
     }
-    if (__DEV__) console.log('[getStops] MOCK fallback (reason: live query returned 0 rows)');
+    if (__DEV__) {
+      console.log('[getStops] MOCK fallback (reason: live query returned 0 rows)');
+      return { stops: MOCK_STOPS, error: null };
+    }
+    return { stops: [], error: null };
   } catch (e) {
-    if (__DEV__) console.warn('[getStops] MOCK fallback (reason: Supabase error)', e);
+    if (__DEV__) {
+      console.warn('[getStops] MOCK fallback (reason: Supabase error)', e);
+      return { stops: MOCK_STOPS, error: null };
+    }
+    return { stops: [], error: STOPS_LOAD_ERROR };
   }
-  return MOCK_STOPS;
 }
 
-/** Fetch a single stop by id. */
-export async function getStopById(id: string): Promise<StopData | null> {
+/** Fetch a single stop by id. Same release-build rule as `getStops`. */
+export async function getStopById(id: string): Promise<StopResult> {
+  const devFallback = (): StopResult => {
+    const stop = MOCK_STOPS.find((s) => s.id === id) ?? null;
+    return { stop, status: stop ? 'ok' : 'not_found' };
+  };
+
   if (!supabaseConfigured) {
-    if (__DEV__) console.log(`[getStopById] MOCK fallback (reason: supabase not configured) id=${id}`);
-    return MOCK_STOPS.find((s) => s.id === id) ?? null;
+    if (__DEV__) {
+      console.log(`[getStopById] MOCK fallback (reason: supabase not configured) id=${id}`);
+      return devFallback();
+    }
+    return { stop: null, status: 'error' };
   }
   try {
     const { data, error } = await supabase
       .from('stops')
       .select('*')
       .eq('id', id)
-      .single();
+      .maybeSingle();
 
     if (error) throw error;
     if (data) {
       if (__DEV__) console.log(`[getStopById] LIVE Supabase: id=${id}`);
-      return dbToStopData(data as Stop);
+      return { stop: dbToStopData(data as Stop), status: 'ok' };
     }
+    if (__DEV__) {
+      console.log(`[getStopById] MOCK fallback (reason: no live row) id=${id}`);
+      return devFallback();
+    }
+    return { stop: null, status: 'not_found' };
   } catch (e) {
-    if (__DEV__) console.warn(`[getStopById] MOCK fallback (reason: Supabase error) id=${id}`, e);
+    if (__DEV__) {
+      console.warn(`[getStopById] MOCK fallback (reason: Supabase error) id=${id}`, e);
+      return devFallback();
+    }
+    return { stop: null, status: 'error' };
   }
-  return MOCK_STOPS.find((s) => s.id === id) ?? null;
 }
 
 /**

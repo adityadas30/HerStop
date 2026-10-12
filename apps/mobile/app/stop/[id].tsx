@@ -67,19 +67,26 @@ export default function StopDetailScreen() {
 
   const [stop, setStop] = useState<StopData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadStatus, setLoadStatus] = useState<'ok' | 'not_found' | 'error'>('ok');
   const [feedback, setFeedback] = useState<FeedbackState>(INITIAL_FEEDBACK);
   const [coords, setCoords] = useState<Coords | null>(null);
   // Set when a guest taps save: what they wanted to save, held until they're back
   // from signing in.
   const [pendingSaveId, setPendingSaveId] = useState<string | null>(null);
 
-  useEffect(() => {
-    getStopById(id ?? '').then((s) => {
-      setStop(s);
+  const loadStop = useCallback(() => {
+    setLoading(true);
+    getStopById(id ?? '').then((result) => {
+      setStop(result.stop);
+      setLoadStatus(result.status);
       setLoading(false);
     });
-    getCurrentCoords().then(setCoords);
   }, [id]);
+
+  useEffect(() => {
+    loadStop();
+    getCurrentCoords().then(setCoords);
+  }, [id, loadStop]);
 
   const loadFeedback = useCallback(async (stopId: string) => {
     setFeedback((prev) => ({ ...prev, loading: true, error: null }));
@@ -189,7 +196,20 @@ export default function StopDetailScreen() {
   if (!stop) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <Text style={[Typography.heading, { color: colors.text }]}>Stop not found</Text>
+        <Text style={[Typography.heading, { color: colors.text, textAlign: 'center' }]}>
+          {loadStatus === 'error' ? "Couldn't load this stop" : 'Stop not found'}
+        </Text>
+        <Text style={[Typography.body, { color: colors.secondaryText, textAlign: 'center' }]}>
+          {loadStatus === 'error'
+            ? 'Check your connection and try again.'
+            : 'This stop may have been removed or the link is out of date.'}
+        </Text>
+        {loadStatus === 'error' && <Button label="Retry" onPress={loadStop} />}
+        <Button
+          label="Go back"
+          variant="ghost"
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+        />
       </View>
     );
   }
@@ -345,6 +365,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: Spacing.md,
+    padding: Spacing.screen,
   },
   scrollContent: {
     paddingBottom: Spacing.xxl,

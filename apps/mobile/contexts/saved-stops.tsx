@@ -49,12 +49,12 @@ export function SavedStopsProvider({ children }: { children: ReactNode }) {
   const loadIdRef = useRef(0);
 
   // The stop catalog, used to turn saved ids into cards. Reading it through
-  // getStops() (live Supabase, with the mock fallback) is what lets a stop that
+  // getStops() (live Supabase; mock only in dev builds) is what lets a stop that
   // exists only in Supabase show up in the Saved tab — filtering MOCK_STOPS
   // here would silently drop every live stop.
   useEffect(() => {
     let isMounted = true;
-    getStops().then((rows) => {
+    getStops().then(({ stops: rows }) => {
       if (isMounted) setStops(rows);
     });
     return () => {
