@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
@@ -31,13 +31,15 @@ export default function ProfileScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, isGuest, loading, sendOtp, verifyOtp, signOut } = useAuth();
+  const { user, isGuest, loading, sendOtp, verifyOtp, signOut, deleteAccount } = useAuth();
 
   const [step, setStep] = useState<Step>('enter-email');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const inputStyle = [
     styles.input,
@@ -87,6 +89,35 @@ export default function ProfileScreen() {
     setError(null);
   }
 
+  function confirmDeleteAccount() {
+    Alert.alert(
+      'Delete account?',
+      'This permanently deletes your account, your saved stops, and the reviews you wrote. ' +
+        'It cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete account', style: 'destructive', onPress: () => void handleDeleteAccount() },
+      ],
+    );
+  }
+
+  async function handleDeleteAccount() {
+    setDeleteError(null);
+    setDeleting(true);
+    const { error: deleteFailure } = await deleteAccount();
+    setDeleting(false);
+    if (deleteFailure) {
+      setDeleteError(deleteFailure);
+      return;
+    }
+    // Success: the auth context is now guest, so the sign-in form shows.
+    // Reset the local flow like sign-out does (tab screens stay mounted).
+    setStep('enter-email');
+    setEmail('');
+    setCode('');
+    setError(null);
+  }
+
   return (
     <View
       style={[
@@ -113,7 +144,17 @@ export default function ProfileScreen() {
             label="Sign out"
             variant="ghost"
             onPress={() => void handleSignOut()}
+            disabled={deleting}
             style={styles.actionButton}
+          />
+          {deleteError && <Text style={styles.errorText}>{deleteError}</Text>}
+          <Button
+            label={deleting ? 'Deleting…' : 'Delete account'}
+            variant="destructive"
+            onPress={confirmDeleteAccount}
+            disabled={deleting}
+            style={[styles.actionButton, deleting && styles.buttonBusy]}
+            testID="delete-account-button"
           />
         </Card>
       ) : step === 'enter-email' ? (

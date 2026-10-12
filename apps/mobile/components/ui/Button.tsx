@@ -3,7 +3,9 @@ import { StyleSheet, Text, TouchableOpacity, type TouchableOpacityProps } from '
 import { Colors, Radius, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-type Variant = 'primary' | 'ghost';
+type Variant = 'primary' | 'ghost' | 'destructive';
+
+const DESTRUCTIVE_COLOR = '#C0392B';
 
 interface ButtonProps extends TouchableOpacityProps {
   label: string;
@@ -16,6 +18,7 @@ export function Button({ label, variant = 'primary', fullWidth = false, style, .
   const colors = Colors[colorScheme ?? 'light'];
 
   const isPrimary = variant === 'primary';
+  const accent = variant === 'destructive' ? DESTRUCTIVE_COLOR : colors.tint;
 
   return (
     <TouchableOpacity
@@ -25,14 +28,14 @@ export function Button({ label, variant = 'primary', fullWidth = false, style, .
         fullWidth && styles.fullWidth,
         isPrimary
           ? { backgroundColor: colors.tint }
-          : { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.tint },
+          : { backgroundColor: 'transparent', borderWidth: 1, borderColor: accent },
         style,
       ]}
       {...rest}>
       <Text
         style={[
           styles.label,
-          { color: isPrimary ? '#FFFFFF' : colors.tint },
+          { color: isPrimary ? '#FFFFFF' : accent },
         ]}>
         {label}
       </Text>
