@@ -21,6 +21,7 @@ import { useAuth } from '@/contexts/auth';
 import { useSavedStops } from '@/contexts/saved-stops';
 import type { StopData } from '@/data/mock-stops';
 import { getStopById, getStopReviews, getStopReviewStats, hideReview, reportReview, wasReviewedThisSession } from '@/lib/api';
+import { canGetDirections, openDirections } from '@/lib/directions';
 import { distanceMiles, formatDistance, getCurrentCoords, type Coords } from '@/lib/location';
 import { reviewCountLabel, scoreStop } from '@/lib/scoring';
 import type { ReportReason, Review, ReviewStats } from '@/lib/types';
@@ -140,6 +141,12 @@ export default function StopDetailScreen() {
     router.push(`/review/${stop.id}`);
   }
 
+  async function handleDirectionsPress() {
+    if (!stop) return;
+    const opened = await openDirections(stop);
+    if (!opened) Alert.alert("Couldn't open directions", 'No maps app was available on this device.');
+  }
+
   function handleReport(reviewId: string) {
     ActionSheetIOS.showActionSheetWithOptions(
       { options: [...REPORT_REASONS.map((r) => r.label), 'Cancel'], cancelButtonIndex: REPORT_REASONS.length },
@@ -237,6 +244,10 @@ export default function StopDetailScreen() {
         <Text style={[styles.attribution, { color: colors.secondaryText }]}>
           © OpenStreetMap contributors
         </Text>
+
+        {canGetDirections(stop) && (
+          <Button label="Directions" onPress={handleDirectionsPress} fullWidth />
+        )}
 
         {syncError && (
           <Text style={[styles.syncError, { color: colors.secondaryText }]}>{syncError}</Text>

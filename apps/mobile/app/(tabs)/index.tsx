@@ -98,19 +98,10 @@ export default function DiscoverScreen() {
         keyboardShouldPersistTaps="handled">
 
         {/* ── Header ── */}
+        {/* Map toggle will go here once the Explore map view lands (t5). Not
+            rendered until it does, so there is no dead control. */}
         <View style={styles.header}>
-          <TouchableOpacity activeOpacity={0.6} hitSlop={8}>
-            <IconSymbol name="line.3.horizontal" size={22} color={colors.text} />
-          </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>HERSTOP</Text>
-          <View style={styles.headerRight}>
-            <TouchableOpacity activeOpacity={0.6} hitSlop={8}>
-              <IconSymbol name="map.fill" size={20} color={colors.text} />
-            </TouchableOpacity>
-            <TouchableOpacity activeOpacity={0.6} hitSlop={8}>
-              <IconSymbol name="person.circle.fill" size={22} color={colors.text} />
-            </TouchableOpacity>
-          </View>
         </View>
 
         {/* ── Search bar ── */}
@@ -218,13 +209,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600' as const,
     letterSpacing: 1.5,
-    marginLeft: Spacing.smd,
     flex: 1,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
   },
 
   // Search
