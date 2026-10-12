@@ -10,7 +10,8 @@ Agents cannot do the founder steps (they need Apple/EAS/Supabase logins).
 - [x] In-app privacy, support, safety disclosure screens and in-app account deletion.
 - [x] App Store privacy-label answers and draft listing copy: `app-store-privacy.md`.
 - [x] No secrets in repo; only the public anon key is ever used by the client.
-- [ ] Release builds without mock stops (t6) and Sentry (t9): in progress on other tasks; confirm merged before building.
+- [x] Sentry crash reporting, DSN-gated and scrubbed (`lib/monitoring.ts`), see below.
+- [ ] Release builds without mock stops (t6): confirm merged before building.
 
 ## Founder steps, in order
 1. **Restore the Supabase project** `xnkjqcygzjlspeagcoal` (currently inactive).
@@ -20,7 +21,7 @@ Agents cannot do the founder steps (they need Apple/EAS/Supabase logins).
 5. **Set EAS environment variables** (EAS cloud builds do not see your local `.env`; without them the build has no backend):
    - `EXPO_PUBLIC_SUPABASE_URL`
    - `EXPO_PUBLIC_SUPABASE_ANON_KEY` (public anon key only; never any privileged key)
-   - later, when Sentry lands: `EXPO_PUBLIC_SENTRY_DSN`
+   - `EXPO_PUBLIC_SENTRY_DSN` (optional; Sentry crash reporting, see below)
    ```
    eas env:create --name EXPO_PUBLIC_SUPABASE_URL --value <url> --environment preview --visibility plaintext
    eas env:create --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value <anon-key> --environment preview --visibility plaintext
@@ -37,3 +38,13 @@ Agents cannot do the founder steps (they need Apple/EAS/Supabase logins).
 ## Notes
 - No `development` profile: `expo-dev-client` isn't installed.
 - Simulator builds are not produced by `preview` (`ios.simulator: false`).
+
+## Crash reporting (Sentry)
+- Off unless `EXPO_PUBLIC_SENTRY_DSN` is set and non-empty; with no DSN the app runs normally and logs once in dev.
+- Founder step: create a Sentry project (React Native), copy its DSN, then set it per environment (EAS cloud builds don't read local `.env`):
+  ```
+  eas env:create --name EXPO_PUBLIC_SENTRY_DSN --value <dsn> --environment preview --visibility plaintext
+  ```
+  Repeat with `--environment production`. A DSN is a public client identifier, not a secret.
+- Privacy: `sendDefaultPii: false`, no session replay, no tracing, no screenshots. `beforeSend`/`beforeBreadcrumb` strip emails, coordinates, auth tokens and review text (tested in `__tests__/monitoring.test.ts`). Disclose crash data in the App Store privacy answers (`app-store-privacy.md`) when the DSN is enabled.
+- **Source-map upload is OFF.** The config plugin is added with no org, project or auth token in the repo, so crash stack traces will be minified until the founder sets up upload (`SENTRY_AUTH_TOKEN` as an EAS secret plus `organization`/`project` plugin options). Do not commit these.
