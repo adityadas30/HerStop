@@ -5,28 +5,43 @@ export interface Coords {
   longitude: number;
 }
 
+export type LocationResult =
+  | { status: 'granted'; coords: Coords }
+  | { status: 'denied' }
+  | { status: 'unavailable' };
+
 /**
  * Request foreground location permission and return the device's current
- * position, or null if permission is denied or the read fails.
+ * position, or why there isn't one: `denied` (user declined) or `unavailable`
+ * (permission fine but the read failed).
  *
  * Foreground-only, one-shot — never watched, stored, or logged. Callers use
  * the result purely in-memory to sort/display distance; nothing here persists
  * a location anywhere (see CLAUDE.md: "no precise travel history stored or
  * logged without an approved spec").
  */
-export async function getCurrentCoords(): Promise<Coords | null> {
+export async function getLocation(): Promise<LocationResult> {
   try {
     const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== Location.PermissionStatus.GRANTED) return null;
+    if (status !== Location.PermissionStatus.GRANTED) return { status: 'denied' };
 
     const position = await Location.getCurrentPositionAsync({
       accuracy: Location.Accuracy.Balanced,
     });
-    return { latitude: position.coords.latitude, longitude: position.coords.longitude };
+    return {
+      status: 'granted',
+      coords: { latitude: position.coords.latitude, longitude: position.coords.longitude },
+    };
   } catch (e) {
-    if (__DEV__) console.warn('[getCurrentCoords] failed', e);
-    return null;
+    if (__DEV__) console.warn('[getLocation] failed', e);
+    return { status: 'unavailable' };
   }
+}
+
+/** Convenience for callers that only need the coordinates (null if denied/unavailable). */
+export async function getCurrentCoords(): Promise<Coords | null> {
+  const result = await getLocation();
+  return result.status === 'granted' ? result.coords : null;
 }
 
 const EARTH_RADIUS_MILES = 3958.8;

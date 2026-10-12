@@ -1,17 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Button } from '@/components/ui/Button';
 import { FilterChip } from '@/components/ui/FilterChip';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { JourneyShield } from '@/components/ui/JourneyShield';
 import { StopCard } from '@/components/ui/StopCard';
 import { StopsMap } from '@/components/StopsMap';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
-import { FILTERS, MOCK_STOPS, type StopData } from '@/data/mock-stops';
+import { FILTERS, type StopData } from '@/data/mock-stops';
 import { getStopReviewStats, getStops } from '@/lib/api';
-import { distanceMiles, getCurrentCoords, type Coords } from '@/lib/location';
+import { distanceMiles, getLocation, type Coords } from '@/lib/location';
 import type { ReviewStats } from '@/lib/types';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -21,7 +22,7 @@ export default function DiscoverScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const [stops, setStops] = useState<StopData[]>(MOCK_STOPS);
+  const [stops, setStops] = useState<StopData[]>([]);
   const [stats, setStats] = useState<Map<string, ReviewStats>>(new Map());
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilters, setSelectedFilters] = useState<Set<string>>(new Set());
@@ -29,20 +30,38 @@ export default function DiscoverScreen() {
   // case it stays null forever — the list just isn't distance-sorted). Never
   // guessed, never defaulted to a fake coordinate.
   const [coords, setCoords] = useState<Coords | null>(null);
+  // Why there's no fix, once we know. Drives the small "turn on location" note.
+  const [locationIssue, setLocationIssue] = useState<'denied' | 'unavailable' | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    getStops().then((loadedStops) => {
+  const loadStops = useCallback(() => {
+    setLoading(true);
+    setLoadError(null);
+    getStops().then(({ stops: loadedStops, error }) => {
       setStops(loadedStops);
+      setLoadError(error);
       setLoading(false);
+      if (loadedStops.length === 0) return;
       // One call for every loaded stop's stats, not one call per stop.
       getStopReviewStats(loadedStops.map((s) => s.id)).then(({ stats: loadedStats }) => {
         setStats(loadedStats);
       });
     });
-    getCurrentCoords().then(setCoords);
   }, []);
+
+  useEffect(() => {
+    loadStops();
+    getLocation().then((result) => {
+      if (result.status === 'granted') {
+        setCoords(result.coords);
+        setLocationIssue(null);
+      } else {
+        setLocationIssue(result.status);
+      }
+    });
+  }, [loadStops]);
 
   function toggleFilter(label: string) {
     setSelectedFilters((prev) => {
@@ -155,17 +174,79 @@ export default function DiscoverScreen() {
     </>
   );
 
+  // One place decides which state the catalog is in, so list and map agree.
+  const catalogState: 'loading' | 'error' | 'empty' | 'no-matches' | 'ready' = loading
+    ? 'loading'
+    : loadError
+      ? 'error'
+      : stops.length === 0
+        ? 'empty'
+        : filteredStops.length === 0
+          ? 'no-matches'
+          : 'ready';
+
+  const stateView =
+    catalogState === 'ready' ? null : (
+      <View style={styles.emptyState}>
+        {catalogState === 'loading' ? (
+          <>
+            <ActivityIndicator color={colors.tint} />
+            <Text style={[styles.emptyBody, { color: colors.secondaryText }]}>Loading stops…</Text>
+          </>
+        ) : catalogState === 'error' ? (
+          <>
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>Couldn&apos;t load stops</Text>
+            <Text style={[styles.emptyBody, { color: colors.secondaryText }]}>{loadError}</Text>
+            <Button label="Retry" onPress={loadStops} />
+          </>
+        ) : catalogState === 'empty' ? (
+          <>
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>No stops listed yet</Text>
+            <Text style={[styles.emptyBody, { color: colors.secondaryText }]}>
+              We don&apos;t have any stops to show right now. Check back soon.
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>No matching stops</Text>
+            <Text style={[styles.emptyBody, { color: colors.secondaryText }]}>
+              Try adjusting your search or filters.
+            </Text>
+          </>
+        )}
+      </View>
+    );
+
+  const locationNote = locationIssue ? (
+    <Text style={[styles.locationNote, { color: colors.secondaryText }]}>
+      {locationIssue === 'denied'
+        ? 'Turn on location to sort by distance'
+        : "Couldn't get your location, so stops aren't sorted by distance"}
+    </Text>
+  ) : null;
+
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       {viewMode === 'map' ? (
         <View style={[styles.mapScreen, { paddingTop: insets.top + Spacing.sm }]}>
-          <View style={styles.mapControls}>{controls}</View>
-          <StopsMap
-            stops={filteredStops}
-            userCoords={coords}
-            loading={loading}
-            onSelectStop={(id) => router.push(`/stop/${id}`)}
-          />
+          <View style={styles.mapControls}>
+            {controls}
+            {locationNote}
+          </View>
+          {stateView ? (
+            <View style={styles.mapState}>
+              {stateView}
+              <Text style={[styles.attribution, { color: colors.secondaryText }]}>
+                © OpenStreetMap contributors
+              </Text>
+            </View>
+          ) : (
+            <StopsMap
+              stops={filteredStops}
+              userCoords={coords}
+              onSelectStop={(id) => router.push(`/stop/${id}`)}
+            />
+          )}
         </View>
       ) : (
       <ScrollView
@@ -176,41 +257,37 @@ export default function DiscoverScreen() {
 
         {controls}
 
-        {/* ── Section header ── */}
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Recommended near you
-          </Text>
-          <Text style={[styles.sectionSubtitle, { color: colors.secondaryText }]}>
-            {filteredStops.length !== stops.length
-              ? `${filteredStops.length} stop${filteredStops.length !== 1 ? 's' : ''} found`
-              : coords
-                ? 'Sorted by distance from you'
-                : 'Browse stops and recent traveler feedback'}
-          </Text>
-        </View>
+        {locationNote}
 
-        {/* ── Stop cards ── */}
-        {filteredStops.length > 0 ? (
-          <View style={styles.cardsList}>
-            {filteredStops.map((stop) => (
-              <StopCard
-                key={stop.id}
-                stop={stop}
-                stats={stats.get(stop.id)}
-                distanceMiles={distances.get(stop.id)}
-                onPress={() => router.push(`/stop/${stop.id}`)}
-              />
-            ))}
-          </View>
-        ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>🔍</Text>
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>No stops found</Text>
-            <Text style={[styles.emptyBody, { color: colors.secondaryText }]}>
-              Try adjusting your search or filters to find stops nearby.
-            </Text>
-          </View>
+        {stateView ?? (
+          <>
+            {/* ── Section header ── */}
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Recommended near you
+              </Text>
+              <Text style={[styles.sectionSubtitle, { color: colors.secondaryText }]}>
+                {filteredStops.length !== stops.length
+                  ? `${filteredStops.length} stop${filteredStops.length !== 1 ? 's' : ''} found`
+                  : coords
+                    ? 'Sorted by distance from you'
+                    : 'Browse stops and recent traveler feedback'}
+              </Text>
+            </View>
+
+            {/* ── Stop cards ── */}
+            <View style={styles.cardsList}>
+              {filteredStops.map((stop) => (
+                <StopCard
+                  key={stop.id}
+                  stop={stop}
+                  stats={stats.get(stop.id)}
+                  distanceMiles={distances.get(stop.id)}
+                  onPress={() => router.push(`/stop/${stop.id}`)}
+                />
+              ))}
+            </View>
+          </>
         )}
 
         {/* ── OSM attribution (ODbL requires this wherever the data is shown) ── */}
@@ -314,16 +391,21 @@ const styles = StyleSheet.create({
     gap: Spacing.screen,
   },
 
+  locationNote: {
+    ...Typography.small,
+    marginBottom: Spacing.md,
+  },
+  mapState: {
+    flex: 1,
+    paddingHorizontal: Spacing.screen,
+  },
+
   // Empty state
   emptyState: {
     alignItems: 'center',
     paddingTop: Spacing.xxl,
     paddingHorizontal: Spacing.md,
     gap: Spacing.sm,
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: Spacing.sm,
   },
   emptyTitle: {
     ...Typography.heading,
