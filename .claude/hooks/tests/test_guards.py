@@ -6,10 +6,14 @@ without tripping the guards it is testing.
 """
 import json
 import subprocess
+import os
 import sys
+from pathlib import Path
 
-HOOKS = "/Users/adityadas/herstop/.claude/hooks"
-REPO = "/Users/adityadas/herstop"
+# Derived from this file's location (<repo>/.claude/hooks/tests/test_guards.py) so the
+# test exercises the hooks of whichever checkout or worktree it runs from.
+REPO = str(Path(__file__).resolve().parents[3])
+HOOKS = REPO + "/.claude/hooks"
 
 DOTENV = "." + "env"
 CAT = "c" + "at"
@@ -22,7 +26,8 @@ OPEN = "using" + " (true)"
 
 def run(hook, payload):
     p = subprocess.run(["python3", HOOKS + "/" + hook],
-                       input=json.dumps(payload), capture_output=True, text=True)
+                       input=json.dumps(payload), capture_output=True, text=True,
+                       env=dict(os.environ, CLAUDE_PROJECT_DIR=REPO))
     out = p.stdout.strip()
     if not out:
         return "PASS-THROUGH", ""
