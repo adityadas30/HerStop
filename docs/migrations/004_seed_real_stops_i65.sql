@@ -1,3 +1,13 @@
+-- ############################################################
+-- # DO NOT RUN — SUPERSEDED BY 006_ingest_real_stops.sql
+-- # (marked 2026-10-12). Kept for history only.
+-- #
+-- # Running this after 005 FAILS: it inserts into `stops` without
+-- # `source_id`, which 005 makes NOT NULL with no default. Running it
+-- # before 005 would work but leaves a hand-curated 18-row set that
+-- # 006 then has to reconcile. Apply 003 -> 005 -> 006 instead.
+-- ############################################################
+
 -- ============================================================
 -- HerStop — seed real I-65 stops (West Lafayette -> Indianapolis),
 -- replacing the fictional `stops` rows used for early UI development

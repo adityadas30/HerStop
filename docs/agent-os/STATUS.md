@@ -115,6 +115,22 @@ Flagging clearly rather than quietly rewriting a shared branch.
    approval; the branch is backed up on origin but not merged).
 
 ## Log
+- **2026-10-12** — **t1 baseline audit + founder apply runbook (Kit).** Branch
+  `astra/full-development` @ `f6b63fa`. Gates (from a fresh `npm ci` worktree): `tsc --noEmit`
+  clean; `npm run lint` clean; `expo export --platform ios` clean (1 bundle, exported to /tmp and
+  deleted); `test_guards.py` 22/22 guard + 7/7 product-language **only when run with
+  `CLAUDE_PROJECT_DIR=/Users/adityadas/herstop`** — the script hard-codes that path and the hooks
+  scope by cwd, so run from a worktree it reports 18/22 (4 content-guard cases pass through). That
+  is a test-harness path issue, not a guard regression; hooks are byte-identical to the main checkout.
+  `supabase:check` / `rls:check`: Supabase MCP reports project `xnkjqcygzjlspeagcoal` **INACTIVE**;
+  `supabase:check` → `ENOTFOUND` (host does not resolve), `rls:check` → 0/12 `fetch failed`
+  (run with a throwaway `.env`, deleted afterwards). `xcrun simctl list devices` now works (no
+  license error) and lists iOS 17.2 devices (iPhone 15 etc., Shutdown); `maestro --version` = 2.10.0.
+  Simulator boot/run not yet attempted. Migrations: 001, 002 applied; **003, 005, 006 unapplied**;
+  004 marked DO-NOT-RUN. Audit found no SQL defects; notable behaviours documented in
+  `docs/migrations/APPLY_RUNBOOK.md` (006 cascades deletes of any saved/reviewed fictional stops;
+  expected counts: 006 → 44 stops, rls:check → 12/12). **Blockers (founder):** restore project,
+  apply 003 → 005 → 006, `eas init`/Apple Developer.
 - **2026-09-22** — **Real stop-data pipeline built; live DB still has the 6 fictional rows
   (founder action needed).** Reality check first: live `stops` (anon-key read, `supabase:check`)
   still returns the 6 fictional dev-seed rows — `003` and `004` were never applied, despite
