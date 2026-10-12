@@ -1,25 +1,26 @@
-# Founder apply runbook — migrations 003 → 005 → 006 (→ 007 optional)
+# Founder apply runbook — migrations 003 → 005 → 006 → 007
 
 _Written 2026-10-12 from the SQL files and `apps/mobile/scripts/{rls,supabase}-check.mjs`, not from
 older docs. Agents do not run any of this — it is founder-only (Supabase SQL Editor)._
 
 **Scope:** takes the live project from "001 + 002 applied, 6 fictional stops" to "reviews live +
 44 real OpenStreetMap stops". **Never run `004`** (DO-NOT-RUN banner in the file; superseded by 006).
-Order matters: **003 → 005 → 006**. Each file is idempotent and wrapped in its own
+Order matters: **003 → 005 → 006 → 007**. Each file is idempotent and wrapped in its own
 `begin … commit` with a 5s `lock_timeout`, so a failed run rolls back cleanly and can be re-run.
 
 Never re-run `002` after `003` — it would re-create the public-read policy on `reviews` that `003`
 drops.
 
-## 0. Restore the paused project
-1. Supabase dashboard → project `herstop` (`xnkjqcygzjlspeagcoal`, us-east-1) → **Restore project**.
-2. Wait until status is Healthy (a few minutes). The URL/anon key in `apps/mobile/.env` do not change.
-3. Sanity check, from `apps/mobile/`:
+## 0. Confirm the project is reachable
+The project `herstop` (`xnkjqcygzjlspeagcoal`, us-east-1) was paused and has been restored
+(`ACTIVE_HEALTHY` as of 2026-10-12). If it ever pauses again: dashboard → **Restore project**, wait
+until Healthy; the URL/anon key in `apps/mobile/.env` do not change.
+1. Sanity check, from `apps/mobile/`:
    ```bash
    npm run supabase:check
    ```
    Expected **before** any migration: `✅ LIVE — Supabase returned 6 row(s) from "stops".`
-   (includes the `Willow Creek Plaza TEST` marker). If you see `ENOTFOUND`, it is still paused.
+   (includes the `Willow Creek Plaza TEST` marker). If you see `ENOTFOUND`, it is paused.
 
 ## 1. Pre-flight (read-only, SQL Editor)
 ```sql
@@ -63,7 +64,8 @@ added/removed outside these migrations.
 ```bash
 npm run rls:check
 ```
-Expected: **`12/12 passed.`** (assertions: stops.id text, anon select stops, anon select
+Expected: **`12/13`** before 007 (the only failure is the 007 assertion) and **`13/13 passed`** after
+007. (assertions: stops.id text, anon select stops, anon select
 saved_stops, anon select reviews, anon insert saved_stops, get_stop_reviews, get_stop_review_stats,
 report_review rejected, hide_review rejected, review_reports / hidden_reviews / banned_users anon
 select = 0 rows). Before 003 (with 001+002 only) the 003-dependent assertions fail — that is why
@@ -78,13 +80,12 @@ select tablename, rowsecurity from pg_tables
                                                              -- rowsecurity = true for all 7
 ```
 
-## 4. Optional: account deletion (007) — after t2 merges
-Only once `docs/migrations/007_delete_my_account.sql` is on the branch you are applying from
-(it ships with t2, which had **not** merged into `astra/full-development` when this was written;
-t2's branch `agentcraft/juniper/t2-account-deletion` contains it). Apply **after 006**, same way:
-paste the whole file into the SQL Editor and run. It defines `public.delete_my_account()`
-(SECURITY DEFINER, `search_path = ''`, EXECUTE revoked from PUBLIC and anon, granted to
-authenticated). Idempotent (`create or replace`).
+## 4. Account deletion (007) — apply after 006
+`docs/migrations/007_delete_my_account.sql` (shipped with t2, merged) is part of the normal sequence
+003 → 005 → 006 → **007**. Apply **after 006**, same way: paste the whole file into the SQL Editor and
+run. It defines `public.delete_my_account()` (SECURITY DEFINER, `search_path = ''`, EXECUTE revoked
+from PUBLIC and anon, granted to authenticated). Idempotent (`create or replace`). It is
+security-sensitive (deletes from `auth.users`): read it before running.
 
 Post-checks:
 ```sql
@@ -94,17 +95,15 @@ select has_function_privilege('anon','public.delete_my_account()','execute');
 ```bash
 npm run rls:check
 ```
-Counts are those of `apps/mobile/scripts/rls-check.mjs`; it has **12** assertions on this
-branch and **13** once t2 lands (t2 adds one for `delete_my_account`):
-- After 003 + 005 + 006, **before 007**, on a branch with t2's script: **12/13** — the single
-  failure is the `delete_my_account` assertion (expected, not an error).
+`apps/mobile/scripts/rls-check.mjs` now has **13** assertions (t2 added the `delete_my_account` one):
+- After 003 + 005 + 006, **before 007**: **12/13** — the single failure is the `delete_my_account`
+  assertion (expected, not an error).
 - After 007: **13/13 passed.**
-- On a branch without t2's script change: 12/12 regardless of 007.
 
 ## 5. After applying
 1. Add a dated line to `docs/agent-os/STATUS.md` (which migrations, counts observed).
 2. Tell the Lead; live review/saved-stop E2E verification is unblocked.
-3. 007 must have been reviewed (security-sensitive) before step 4 is run.
+3. 007 must have been reviewed (security-sensitive) before section 4 is run.
 
 ## Rollback
 - 005: rollback SQL is at the bottom of the file (dev only).
