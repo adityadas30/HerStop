@@ -1,7 +1,8 @@
 # Rule: Testing & Verification
 
-There is **no unit-test runner for app code** (no Jest). The one automated suite in this repo is
-the harness's own guard regression suite. Do not claim tests pass when none exist. Use the
+App code has a small Jest (jest-expo) unit suite in `apps/mobile/__tests__/` (`npm test`, pure `lib/`
+behaviour only: scoring, directions, distance). It is not UI verification. The harness's guard regression
+suite is separate. Do not claim tests pass when none exist. Use the
 verification levels below and record results in the feature's `verification.md`.
 
 ```bash
