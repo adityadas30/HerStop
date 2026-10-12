@@ -11,10 +11,10 @@ Agents cannot do the founder steps (they need Apple/EAS/Supabase logins).
 - [x] App Store privacy-label answers and draft listing copy: `app-store-privacy.md`.
 - [x] No secrets in repo; only the public anon key is ever used by the client.
 - [x] Sentry crash reporting, DSN-gated and scrubbed (`lib/monitoring.ts`), see below.
-- [ ] Release builds without mock stops (t6): confirm merged before building.
+- [x] Release builds without mock stops (t6, merged `060963f`): mock stops only under `__DEV__`. Never run as a release build; confirm on the first preview build.
 
 ## Founder steps, in order
-1. **Restore the Supabase project** `xnkjqcygzjlspeagcoal` (currently inactive).
+1. **Supabase project** `xnkjqcygzjlspeagcoal` (restored, `ACTIVE_HEALTHY` as of 2026-10-12; see `supabase:check`).
 2. **Apply migrations** per `docs/migrations` runbook: 003 → 005 → 006 → 007 (007 = account deletion). Do not run 004. Run `npm run rls:check` and `npm run supabase:check` from `apps/mobile`.
 3. **Apple Developer Program** membership active (bundle ID + TestFlight).
 4. `eas login`, then from `apps/mobile/`: `eas init` (writes the project ID into app config; review before committing).
