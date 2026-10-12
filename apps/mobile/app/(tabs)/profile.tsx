@@ -1,5 +1,6 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
@@ -19,10 +20,17 @@ type Step = 'enter-email' | 'enter-code';
 const OTP_MIN_LENGTH = 6;
 const OTP_MAX_LENGTH = 10;
 
+const ABOUT_LINKS = [
+  { label: 'Privacy Policy', href: '/legal/privacy' },
+  { label: 'Support', href: '/legal/support' },
+  { label: 'Safety Disclosure', href: '/legal/safety-disclosure' },
+] as const;
+
 export default function ProfileScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { user, isGuest, loading, sendOtp, verifyOtp, signOut, deleteAccount } = useAuth();
 
   const [step, setStep] = useState<Step>('enter-email');
@@ -215,6 +223,18 @@ export default function ProfileScreen() {
           />
         </Card>
       )}
+
+      <Card style={[styles.card, styles.aboutCard]}>
+        <Text style={[styles.cardTitle, { color: colors.text }]}>About</Text>
+        {ABOUT_LINKS.map((link) => (
+          <Pressable
+            key={link.href}
+            accessibilityRole="link"
+            onPress={() => router.push(link.href)}>
+            <Text style={[styles.aboutLink, { color: colors.tint }]}>{link.label}</Text>
+          </Pressable>
+        ))}
+      </Card>
     </View>
   );
 }
@@ -249,6 +269,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.smd,
     fontSize: 16,
+  },
+  aboutCard: {
+    marginTop: Spacing.md,
+  },
+  aboutLink: {
+    ...Typography.bodyMed,
+    paddingVertical: Spacing.xs,
   },
   actionButton: {
     marginTop: Spacing.xs,
