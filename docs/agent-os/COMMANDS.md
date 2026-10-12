@@ -45,7 +45,7 @@ the whole verification run.
 Without it a fresh worktree fails tsc/lint/supabase:check for reasons unrelated to the change.
 
 ## Not available yet (do not invent)
-- No `test` script / no Jest for app code.
+- Jest covers pure `lib/` functions only (`npm test`); there are no component/UI tests.
 - Maestro is **not installed**; flows are staged in `apps/mobile/.maestro/` and skipped.
 - `npm run android` exists but Android is out of scope for v1.
 

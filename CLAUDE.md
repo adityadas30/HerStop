@@ -57,12 +57,13 @@ Google Maps APIs · PostHog · Sentry · Zod. Monorepo: `apps/mobile`, `packages
 ```bash
 npx tsc --noEmit          # typecheck — must pass
 npm run lint              # eslint — must pass
+npm test                  # jest-expo unit tests (__tests__/) — must pass
 npm run supabase:check    # live Supabase reads vs mock fallback
 npm run rls:check         # read-only anon-key RLS assertions
 npm run ios               # Simulator
 ```
 Guard regression suite (from repo root): `python3 .claude/hooks/tests/test_guards.py`
-No Jest. Maestro 2.10 installed (2026-09-10) — flows in `apps/mobile/.maestro/`, run with
+Unit tests: Jest via jest-expo (`apps/mobile/__tests__/`, pure `lib/` behaviour only). Maestro 2.10 installed (2026-09-10) — flows in `apps/mobile/.maestro/`, run with
 `maestro --device <udid> test <flow>`.
 Never run `npm run reset-project` (destroys the app).
 
