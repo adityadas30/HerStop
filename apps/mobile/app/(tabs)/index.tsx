@@ -7,6 +7,7 @@ import { FilterChip } from '@/components/ui/FilterChip';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { JourneyShield } from '@/components/ui/JourneyShield';
 import { StopCard } from '@/components/ui/StopCard';
+import { StopsMap } from '@/components/StopsMap';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 import { FILTERS, MOCK_STOPS, type StopData } from '@/data/mock-stops';
 import { getStopReviewStats, getStops } from '@/lib/api';
@@ -28,10 +29,13 @@ export default function DiscoverScreen() {
   // case it stays null forever — the list just isn't distance-sorted). Never
   // guessed, never defaulted to a fake coordinate.
   const [coords, setCoords] = useState<Coords | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     getStops().then((loadedStops) => {
       setStops(loadedStops);
+      setLoading(false);
       // One call for every loaded stop's stats, not one call per stop.
       getStopReviewStats(loadedStops.map((s) => s.id)).then(({ stats: loadedStats }) => {
         setStats(loadedStats);
@@ -89,19 +93,29 @@ export default function DiscoverScreen() {
     return result;
   }, [stops, searchQuery, selectedFilters, coords, distances]);
 
-  return (
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + Spacing.sm }]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled">
-
+  const controls = (
+    <>
         {/* ── Header ── */}
-        {/* Map toggle will go here once the Explore map view lands (t5). Not
-            rendered until it does, so there is no dead control. */}
         <View style={styles.header}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>HERSTOP</Text>
+          <View style={[styles.segmented, { backgroundColor: colors.surface }]}>
+            {(['list', 'map'] as const).map((mode) => {
+              const active = viewMode === mode;
+              return (
+                <TouchableOpacity
+                  key={mode}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={mode === 'list' ? 'List view' : 'Map view'}
+                  onPress={() => setViewMode(mode)}
+                  style={[styles.segment, active && { backgroundColor: colors.tint }]}>
+                  <Text style={[styles.segmentText, { color: active ? '#FFFFFF' : colors.text }]}>
+                    {mode === 'list' ? 'List' : 'Map'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
 
         {/* ── Search bar ── */}
@@ -138,6 +152,29 @@ export default function DiscoverScreen() {
             />
           ))}
         </ScrollView>
+    </>
+  );
+
+  return (
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      {viewMode === 'map' ? (
+        <View style={[styles.mapScreen, { paddingTop: insets.top + Spacing.sm }]}>
+          <View style={styles.mapControls}>{controls}</View>
+          <StopsMap
+            stops={filteredStops}
+            userCoords={coords}
+            loading={loading}
+            onSelectStop={(id) => router.push(`/stop/${id}`)}
+          />
+        </View>
+      ) : (
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + Spacing.sm }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled">
+
+        {controls}
 
         {/* ── Section header ── */}
         <View style={styles.sectionHeader}>
@@ -181,6 +218,7 @@ export default function DiscoverScreen() {
           © OpenStreetMap contributors
         </Text>
       </ScrollView>
+      )}
 
       {/* ── Journey Shield (floating) ── */}
       <View style={[styles.shieldWrap, { paddingBottom: Spacing.sm }]}>
@@ -210,6 +248,27 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
     letterSpacing: 1.5,
     flex: 1,
+  },
+
+  segmented: {
+    flexDirection: 'row',
+    borderRadius: Radius.full,
+    padding: 2,
+  },
+  segment: {
+    paddingVertical: Spacing.xs + 2,
+    paddingHorizontal: Spacing.md,
+    borderRadius: Radius.full,
+  },
+  segmentText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+  },
+  mapScreen: {
+    flex: 1,
+  },
+  mapControls: {
+    paddingHorizontal: Spacing.screen,
   },
 
   // Search
