@@ -52,8 +52,8 @@ export default function SavedScreen() {
             </Text>
             <Text style={[styles.cardBody, { color: colors.secondaryText }]}>
               {hasStops
-                ? 'Sign in to keep these stops after you close the app, and to reach them from any device.'
-                : 'Bookmark a stop while you browse. Sign in to keep your list across trips and devices.'}
+                ? 'These saves last until you close the app. Sign in, then save stops to keep a list across trips and devices.'
+                : 'Bookmark a stop while you browse. Guest saves last until you close the app; sign in to keep a list across trips and devices.'}
             </Text>
             <Button
               label="Sign in"
