@@ -1,0 +1,33 @@
+# HerStop — request an email OTP code (guest -> enter-code step).
+#
+# Phase A1 of a two-phase manual verification: this flow must tap "Send code"
+# exactly once, because Supabase's default email sender rate-limits requests
+# and a second send invalidates the first code. `auth-enter-code.yaml`
+# deliberately does NOT call launchApp, so it continues from wherever this
+# flow leaves the app rather than relaunching (which would drop the
+# in-memory `step` state on the Profile screen back to "enter-email").
+#
+# Run with: maestro test --device <UDID> -e EMAIL=you@example.com auth-request-code.yaml
+appId: com.adityadas.herstop
+name: HerStop request an OTP email code
+---
+- launchApp:
+    clearState: false
+
+- extendedWaitUntil:
+    visible: "Get Started"
+    timeout: 30000
+- tapOn: "Get Started"
+
+- tapOn: ".*Profile.*"
+- assertVisible: "Profile"
+
+# Guard: if a previous run left this screen signed in or already on the
+# enter-code step, fail loudly here instead of silently re-sending a code.
+- assertVisible: "you@example.com"
+
+- tapOn: "you@example.com"
+- inputText: ${EMAIL}
+- tapOn: "Send code"
+- assertVisible: "Enter the code sent to your email"
+- takeScreenshot: maestro-herstop-otp-request

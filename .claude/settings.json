@@ -1,13 +1,93 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+
+  "worktree": {
+    "baseRef": "head"
+  },
+
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc --noEmit)",
+      "Bash(npm run lint)",
+      "Bash(npm run supabase:check)",
+      "Bash(npm run rls:check)",
+      "Bash(npm install)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git worktree list:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git checkout -b:*)",
+      "Bash(xcrun simctl list:*)",
+      "Bash(xcrun simctl boot:*)",
+      "Bash(xcrun simctl io:*)",
+      "Bash(xcrun devicectl list:*)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(git merge:*)",
+      "Bash(git worktree remove:*)",
+      "Bash(psql:*)",
+      "Bash(supabase db:*)",
+      "Bash(xcrun simctl erase:*)",
+      "Bash(npm install:*)",
+      "Bash(npx expo install:*)"
+    ],
+    "deny": [
+      "Read(./**/.env)",
+      "Read(./**/.env.local)",
+      "Write(./**/.env)",
+      "Edit(./**/.env)",
+      "Bash(npm run reset-project:*)",
+      "Bash(eas:*)",
+      "Bash(expo publish:*)"
+    ]
+  },
+
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh\"", "timeout": 15 }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-bash.py\"", "timeout": 10 }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-write.py\"", "timeout": 10 }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit",
+        "matcher": "Edit|Write",
         "hooks": [
-          {
-            "type": "command",
-            "command": "cd \"$CLAUDE_PROJECT_DIR/apps/mobile\" 2>/dev/null && npm run lint -- --fix || true"
-          }
+          { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-product-language.py\"", "timeout": 10 },
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/lint-fix.sh\"", "timeout": 60 }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/quality-gate.sh\"", "timeout": 180 }
         ]
       }
     ],
@@ -15,10 +95,7 @@
       {
         "matcher": "",
         "hooks": [
-          {
-            "type": "command",
-            "command": "osascript -e 'display notification \"Claude Code needs your attention\" with title \"Claude Code\"'"
-          }
+          { "type": "command", "command": "osascript -e 'display notification \"Claude Code needs your attention\" with title \"HerStop Lead\"' >/dev/null 2>&1 || true" }
         ]
       }
     ]

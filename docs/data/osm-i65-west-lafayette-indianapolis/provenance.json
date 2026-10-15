@@ -1,0 +1,26 @@
+{
+  "retrieved_at": "2026-09-22T21:28:45.166Z",
+  "retrieved_at_source": "script run time (client clock)",
+  "corridor": {
+    "slug": "osm-i65-west-lafayette-indianapolis",
+    "description": "West Lafayette, Indiana -> Indianapolis, Indiana along I-65",
+    "bbox_south_west_north_east": [
+      39.8,
+      -87,
+      40.47,
+      -86.1
+    ]
+  },
+  "overpass_endpoints": [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.osm.ch/api/interpreter"
+  ],
+  "nominatim_endpoint": "https://nominatim.openstreetmap.org/reverse",
+  "nominatim_rate_limit": "max 1 request/sec, enforced with a 1.1s sleep between calls",
+  "raw_overpass_element_count": 62,
+  "named_non_lifecycle_count": 50,
+  "deduplicated_count": 44,
+  "final_stop_count": 44,
+  "nominatim_reverse_geocode_count": 20,
+  "note": "Unlike the original hand-curated docs/data/osm-i65-west-lafayette-indianapolis dataset (18 of 42 clusters, manually selected for corridor spread), this automated run keeps every deduplicated, named, addressable stop found in the corridor rather than making a subjective selection — that keeps the pipeline repeatable with no manual step."
+}

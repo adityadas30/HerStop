@@ -1,0 +1,10 @@
+# Claude Code local state
+.claude/settings.local.json
+.claude/worktrees/
+.claude/.quality-gate-fired
+.claude/projects/
+
+__pycache__/
+
+# OS
+.DS_Store

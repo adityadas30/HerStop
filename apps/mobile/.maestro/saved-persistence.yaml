@@ -1,0 +1,40 @@
+# HerStop — a saved stop survives a full app restart while signed in.
+#
+# Assumes the app is already signed in (run after auth-enter-code.yaml
+# succeeds). Opens the first stop card, saves it from the detail screen's
+# bookmark, confirms it in the Saved tab, then does a real app relaunch
+# (the actual criterion under test) and confirms the list still shows it —
+# with no guest "Sign in" invitation flashing during the restore.
+#
+# Run with: maestro test --device <UDID> saved-persistence.yaml
+appId: com.adityadas.herstop
+name: HerStop saved stop persists across a relaunch (signed-in path)
+---
+- tapOn: ".*Explore.*"
+- assertVisible: ".*Explore.*"
+
+- tapOn:
+    id: "stop-card-.*"
+    index: 0
+- assertNotVisible: "Verified safe"
+- assertNotVisible: "Guaranteed"
+
+- tapOn:
+    id: "stop-detail-bookmark"
+- tapOn: "Back"
+
+- tapOn: "Saved, tab.*"
+- assertVisible: "Saved Stops"
+- assertNotVisible: "No saved stops yet"
+- assertNotVisible: "Sign in"
+- takeScreenshot: maestro-herstop-saved-before-relaunch
+
+# The real persistence check: kill and relaunch, then look again.
+- launchApp:
+    clearState: false
+- takeScreenshot: maestro-herstop-relaunch-immediate
+- tapOn: "Saved, tab.*"
+- assertVisible: "Saved Stops"
+- assertNotVisible: "No saved stops yet"
+- assertNotVisible: "Sign in"
+- takeScreenshot: maestro-herstop-saved-after-relaunch

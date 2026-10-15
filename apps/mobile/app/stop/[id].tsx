@@ -1,29 +1,189 @@
-import { useEffect, useState } from 'react';
-import { useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import {
+  ActionSheetIOS,
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
+import { Button } from '@/components/ui/Button';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { ScoreBadge } from '@/components/ui/ScoreBadge';
+import { ReviewCard } from '@/components/ReviewCard';
 import { Colors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { useAuth } from '@/contexts/auth';
 import { useSavedStops } from '@/contexts/saved-stops';
 import type { StopData } from '@/data/mock-stops';
-import { getStopById } from '@/lib/api';
+import { getStopById, getStopReviews, getStopReviewStats, hideReview, reportReview, wasReviewedThisSession } from '@/lib/api';
+import { canGetDirections, openDirections } from '@/lib/directions';
+import { distanceMiles, formatDistance, getCurrentCoords, type Coords } from '@/lib/location';
+import { reviewCountLabel, scoreStop } from '@/lib/scoring';
+import type { ReportReason, Review, ReviewStats } from '@/lib/types';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+
+/** Options shown in the "Report review" reason sheet, in the order the spec lists them. */
+const REPORT_REASONS: { label: string; reason: ReportReason }[] = [
+  { label: 'Spam', reason: 'spam' },
+  { label: 'Offensive or harassing', reason: 'offensive' },
+  { label: 'Not about this stop', reason: 'not_about_stop' },
+  { label: 'Shares personal info', reason: 'personal_info' },
+  { label: 'Other', reason: 'other' },
+];
+
+interface FeedbackState {
+  loading: boolean;
+  error: string | null;
+  reviews: Review[];
+  stats: ReviewStats | undefined;
+}
+
+const INITIAL_FEEDBACK: FeedbackState = { loading: true, error: null, reviews: [], stats: undefined };
+
+/** A single Lighting/Restroom/Cleanliness/Staff average line in the score card. */
+function RatingLine({ label, value }: { label: string; value: number }) {
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? 'light'];
+  return (
+    <View style={styles.ratingLine}>
+      <Text style={[styles.ratingLabel, { color: colors.secondaryText }]}>{label}</Text>
+      <Text style={[styles.ratingValue, { color: colors.text }]}>{value.toFixed(1)} / 5</Text>
+    </View>
+  );
+}
 
 export default function StopDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
-  const { isSaved, toggleSaved } = useSavedStops();
+  const router = useRouter();
+  const { isGuest, loading: authLoading } = useAuth();
+  const { isSaved, toggleSaved, loading: savedLoading, syncError } = useSavedStops();
 
   const [stop, setStop] = useState<StopData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadStatus, setLoadStatus] = useState<'ok' | 'not_found' | 'error'>('ok');
+  const [feedback, setFeedback] = useState<FeedbackState>(INITIAL_FEEDBACK);
+  const [coords, setCoords] = useState<Coords | null>(null);
+  // Set when a guest taps save: what they wanted to save, held until they're back
+  // from signing in.
+  const [pendingSaveId, setPendingSaveId] = useState<string | null>(null);
 
-  useEffect(() => {
-    getStopById(id ?? '').then((s) => {
-      setStop(s);
+  const loadStop = useCallback(() => {
+    setLoading(true);
+    getStopById(id ?? '').then((result) => {
+      setStop(result.stop);
+      setLoadStatus(result.status);
       setLoading(false);
     });
   }, [id]);
+
+  useEffect(() => {
+    loadStop();
+    getCurrentCoords().then(setCoords);
+  }, [id, loadStop]);
+
+  const loadFeedback = useCallback(async (stopId: string) => {
+    setFeedback((prev) => ({ ...prev, loading: true, error: null }));
+    const [reviewsResult, statsResult] = await Promise.all([
+      getStopReviews(stopId),
+      getStopReviewStats([stopId]),
+    ]);
+    setFeedback({
+      loading: false,
+      error: reviewsResult.error ?? statsResult.error,
+      reviews: reviewsResult.reviews,
+      stats: statsResult.stats.get(stopId),
+    });
+  }, []);
+
+  // Refetch every time this screen gains focus — covers coming back from the
+  // review form after a successful submit, and from a report/hide action.
+  useFocusEffect(
+    useCallback(() => {
+      if (id) loadFeedback(id);
+    }, [id, loadFeedback]),
+  );
+
+  function handleSavePress(stopId: string) {
+    // Auth is still restoring the session — we don't yet know if there's a
+    // signed-in user, so ignore the tap rather than guessing guest and
+    // routing away from this screen.
+    if (authLoading) return;
+    if (isGuest) {
+      // Browsing stays open to everyone; only saving needs an account. Send them
+      // to the sign-in flow on Profile and finish the save when they return.
+      // `push` (not `navigate`) on purpose: it keeps this screen mounted underneath,
+      // which is what lets the effect below complete the save afterwards.
+      setPendingSaveId(stopId);
+      router.push('/profile');
+      return;
+    }
+    toggleSaved(stopId);
+  }
+
+  // Finish a guest's save once they're signed in — but only after their existing
+  // saved list has loaded, so this save isn't overwritten by the restore.
+  useEffect(() => {
+    if (!pendingSaveId || isGuest || savedLoading) return;
+    setPendingSaveId(null);
+    if (!isSaved(pendingSaveId)) toggleSaved(pendingSaveId);
+  }, [pendingSaveId, isGuest, savedLoading, isSaved, toggleSaved]);
+
+  function handleWriteReviewPress() {
+    if (!stop) return;
+    // Auth is still restoring — same reasoning as handleSavePress above.
+    if (authLoading) return;
+    if (isGuest) {
+      // Guest → sign in on Profile → they land back on this screen (same
+      // pattern as guest save), and can tap the button again once signed in.
+      router.push('/profile');
+      return;
+    }
+    router.push(`/review/${stop.id}`);
+  }
+
+  async function handleDirectionsPress() {
+    if (!stop) return;
+    const opened = await openDirections(stop);
+    if (!opened) Alert.alert("Couldn't open directions", 'No maps app was available on this device.');
+  }
+
+  function handleReport(reviewId: string) {
+    ActionSheetIOS.showActionSheetWithOptions(
+      { options: [...REPORT_REASONS.map((r) => r.label), 'Cancel'], cancelButtonIndex: REPORT_REASONS.length },
+      (buttonIndex) => {
+        if (buttonIndex >= REPORT_REASONS.length) return; // Cancel
+        void reportReview(reviewId, REPORT_REASONS[buttonIndex].reason, null).then(({ error }) => {
+          Alert.alert(error ?? "Thanks — we'll take a look.");
+        });
+      },
+    );
+  }
+
+  function handleHide(reviewId: string) {
+    Alert.alert('Hide this review?', "You won't see it again.", [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Hide',
+        style: 'destructive',
+        onPress: () => {
+          void hideReview(reviewId).then(({ error }) => {
+            if (error) {
+              Alert.alert(error);
+              return;
+            }
+            if (id) loadFeedback(id);
+          });
+        },
+      },
+    ]);
+  }
 
   if (loading) {
     return (
@@ -36,12 +196,30 @@ export default function StopDetailScreen() {
   if (!stop) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <Text style={[Typography.heading, { color: colors.text }]}>Stop not found</Text>
+        <Text style={[Typography.heading, { color: colors.text, textAlign: 'center' }]}>
+          {loadStatus === 'error' ? "Couldn't load this stop" : 'Stop not found'}
+        </Text>
+        <Text style={[Typography.body, { color: colors.secondaryText, textAlign: 'center' }]}>
+          {loadStatus === 'error'
+            ? 'Check your connection and try again.'
+            : 'This stop may have been removed or the link is out of date.'}
+        </Text>
+        {loadStatus === 'error' && <Button label="Retry" onPress={loadStop} />}
+        <Button
+          label="Go back"
+          variant="ghost"
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+        />
       </View>
     );
   }
 
-  const isRecommended = stop.badge === 'recommended';
+  const score = scoreStop(feedback.stats);
+  const myReview = feedback.reviews.find((r) => r.is_mine);
+  const wouldStopPct =
+    feedback.stats && feedback.stats.review_count > 0
+      ? Math.round((feedback.stats.would_stop_again_count / feedback.stats.review_count) * 100)
+      : 0;
 
   return (
     <ScrollView
@@ -54,8 +232,9 @@ export default function StopDetailScreen() {
 
         {/* Bookmark */}
         <TouchableOpacity
+          testID="stop-detail-bookmark"
           style={[styles.bookmarkBtn, { backgroundColor: colors.tint }]}
-          onPress={() => toggleSaved(stop.id)}
+          onPress={() => handleSavePress(stop.id)}
           activeOpacity={0.7}>
           <IconSymbol
             name={isSaved(stop.id) ? 'bookmark.fill' : 'bookmark'}
@@ -67,27 +246,32 @@ export default function StopDetailScreen() {
 
       {/* Main info */}
       <View style={styles.body}>
-        {/* Badge + distance */}
-        <View style={styles.metaRow}>
-          <View
-            style={[
-              styles.badge,
-              { backgroundColor: isRecommended ? colors.tintLight : colors.surfaceAlt },
-            ]}>
-            <Text
-              style={[
-                styles.badgeText,
-                { color: isRecommended ? colors.tint : colors.secondaryText },
-              ]}>
-              {isRecommended ? 'RECOMMENDED STOP' : 'GOOD OPTION'}
-            </Text>
+        {/* Badge — only once we actually know the label; never guess during an error */}
+        {!feedback.loading && !feedback.error && (
+          <View style={styles.metaRow}>
+            <ScoreBadge label={score.label} />
           </View>
-          <Text style={[styles.distance, { color: colors.secondaryText }]}>{stop.distance}</Text>
-        </View>
+        )}
 
         {/* Name + address */}
         <Text style={[styles.stopName, { color: colors.text }]}>{stop.name}</Text>
-        <Text style={[styles.address, { color: colors.secondaryText }]}>{stop.address}</Text>
+        <Text style={[styles.address, { color: colors.secondaryText }]}>
+          {stop.address}
+          {coords
+            ? ` · ${formatDistance(distanceMiles(coords, { latitude: stop.latitude, longitude: stop.longitude }))}`
+            : ''}
+        </Text>
+        <Text style={[styles.attribution, { color: colors.secondaryText }]}>
+          © OpenStreetMap contributors
+        </Text>
+
+        {canGetDirections(stop) && (
+          <Button label="Directions" onPress={handleDirectionsPress} fullWidth />
+        )}
+
+        {syncError && (
+          <Text style={[styles.syncError, { color: colors.secondaryText }]}>{syncError}</Text>
+        )}
 
         {/* Tags */}
         <View style={styles.tagsRow}>
@@ -101,30 +285,76 @@ export default function StopDetailScreen() {
           ))}
         </View>
 
-        {/* Community Score */}
-        <View style={[styles.card, Shadows.sm, { backgroundColor: colors.card }]}>
-          <Text style={[styles.cardTitle, { color: colors.text }]}>Community Score</Text>
-          <View style={styles.scoreRow}>
-            <Text style={[styles.scoreValue, { color: colors.tint }]}>{stop.rating}</Text>
-            <View style={styles.scoreDetail}>
-              <Text style={[styles.scoreStars, { color: colors.tint }]}>
-                {'★'.repeat(Math.round(stop.rating))}
-                {'☆'.repeat(5 - Math.round(stop.rating))}
-              </Text>
-              <Text style={[styles.reviewCount, { color: colors.secondaryText }]}>
-                {stop.reviewCount} review{stop.reviewCount !== 1 ? 's' : ''}
-              </Text>
-            </View>
+        {feedback.loading ? (
+          <View style={[styles.card, Shadows.sm, styles.centeredCard, { backgroundColor: colors.card }]}>
+            <ActivityIndicator color={colors.tint} />
           </View>
-        </View>
+        ) : feedback.error ? (
+          <View style={[styles.card, Shadows.sm, styles.centeredCard, { backgroundColor: colors.card }]}>
+            <Text style={[Typography.body, { color: colors.text, textAlign: 'center' }]}>
+              {feedback.error}
+            </Text>
+            <Button label="Retry" variant="ghost" onPress={() => id && loadFeedback(id)} />
+          </View>
+        ) : (
+          <>
+            {/* Score summary */}
+            <View style={[styles.card, Shadows.sm, { backgroundColor: colors.card }]}>
+              <Text style={[styles.cardTitle, { color: colors.text }]}>Community Score</Text>
+              {score.label === 'limited' ? (
+                <Text style={[styles.placeholder, { color: colors.secondaryText }]}>
+                  Fewer than 3 traveler reviews so far — not enough to make a recommendation yet.
+                </Text>
+              ) : (
+                <View style={styles.scoreDetails}>
+                  <Text style={[styles.placeholder, { color: colors.secondaryText }]}>
+                    Based on {reviewCountLabel(feedback.stats!.review_count)}
+                  </Text>
+                  <RatingLine label="Lighting" value={feedback.stats!.avg_lighting} />
+                  <RatingLine label="Restroom" value={feedback.stats!.avg_restroom} />
+                  <RatingLine label="Cleanliness" value={feedback.stats!.avg_cleanliness} />
+                  <RatingLine label="Staff" value={feedback.stats!.avg_staff} />
+                  <Text style={[styles.placeholder, { color: colors.secondaryText }]}>
+                    {wouldStopPct}% would stop here alone again
+                  </Text>
+                  {score.reasons.map((reason) => (
+                    <Text key={reason} style={[styles.reasonLine, { color: colors.secondaryText }]}>
+                      {reason}
+                    </Text>
+                  ))}
+                </View>
+              )}
+            </View>
 
-        {/* Reviews placeholder */}
-        <View style={[styles.card, Shadows.sm, { backgroundColor: colors.card }]}>
-          <Text style={[styles.cardTitle, { color: colors.text }]}>Traveler Reviews</Text>
-          <Text style={[styles.placeholder, { color: colors.secondaryText }]}>
-            Reviews from verified women travelers will appear here.
-          </Text>
-        </View>
+            {/* Reviews */}
+            <View style={[styles.card, Shadows.sm, { backgroundColor: colors.card }]}>
+              <Text style={[styles.cardTitle, { color: colors.text }]}>Traveler Reviews</Text>
+              {feedback.reviews.length === 0 ? (
+                <Text style={[styles.placeholder, { color: colors.secondaryText }]}>
+                  No reviews yet. Stopped here? Your review helps the next traveler.
+                </Text>
+              ) : (
+                <View style={styles.reviewsList}>
+                  {feedback.reviews.map((review) => (
+                    <ReviewCard
+                      key={review.id}
+                      review={review}
+                      justReviewedThisSession={review.is_mine && wasReviewedThisSession(stop.id)}
+                      onReport={() => handleReport(review.id)}
+                      onHide={() => handleHide(review.id)}
+                    />
+                  ))}
+                </View>
+              )}
+            </View>
+          </>
+        )}
+
+        <Button
+          label={myReview ? 'Edit your review' : 'Write a review'}
+          onPress={handleWriteReviewPress}
+          fullWidth
+        />
       </View>
     </ScrollView>
   );
@@ -135,6 +365,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: Spacing.md,
+    padding: Spacing.screen,
   },
   scrollContent: {
     paddingBottom: Spacing.xxl,
@@ -164,26 +396,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.smd,
   },
-  badge: {
-    paddingVertical: Spacing.xs,
-    paddingHorizontal: Spacing.smd,
-    borderRadius: Radius.full,
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: '700' as const,
-    letterSpacing: 0.6,
-    lineHeight: 14,
-  },
-  distance: {
-    ...Typography.caption,
-  },
   stopName: {
     ...Typography.title,
   },
   address: {
     ...Typography.body,
     marginTop: -Spacing.xs,
+  },
+  syncError: {
+    ...Typography.caption,
+  },
+  attribution: {
+    ...Typography.small,
   },
   tagsRow: {
     flexDirection: 'row',
@@ -212,31 +436,32 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
     gap: Spacing.smd,
   },
+  centeredCard: {
+    alignItems: 'center',
+  },
   cardTitle: {
     ...Typography.subhead,
   },
-  scoreRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.smd,
-  },
-  scoreValue: {
-    fontSize: 36,
-    fontWeight: '700' as const,
-    letterSpacing: -1,
-    lineHeight: 40,
-  },
-  scoreDetail: {
-    gap: Spacing.xs,
-  },
-  scoreStars: {
-    fontSize: 16,
-    letterSpacing: 2,
-  },
-  reviewCount: {
-    ...Typography.caption,
-  },
   placeholder: {
     ...Typography.body,
+  },
+  scoreDetails: {
+    gap: Spacing.sm,
+  },
+  ratingLine: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  ratingLabel: {
+    ...Typography.body,
+  },
+  ratingValue: {
+    ...Typography.bodyMed,
+  },
+  reasonLine: {
+    ...Typography.caption,
+  },
+  reviewsList: {
+    gap: Spacing.smd,
   },
 });

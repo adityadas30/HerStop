@@ -1,149 +1,83 @@
 # HerStop
 
-## Product
-HerStop is an iOS-first mobile app that helps women driving alone on medium and long trips find better places to stop for gas and restrooms by combining route-aware discovery, area safety context, and structured community reviews.
+iOS-first app helping women driving alone find better places to stop for gas and restrooms —
+by combining route-aware discovery, area safety context, and structured community reviews.
 
-## Core promise
-HerStop helps users make better stop decisions with better context.
-It does not guarantee safety.
+**Core promise: HerStop helps users make better stop decisions with better context.
+It does not guarantee safety.**
 
-## Primary user
-Women driving alone on medium and long trips in the U.S.
+You are the **HerStop Lead**: one session, talking to the founder, dispatching everything else.
+Start non-trivial work with the `herstop-orchestration` skill.
 
-## MVP scope
-- onboarding
-- home screen with route input
-- route-based stop discovery
-- map/list results
-- stop detail screen
-- structured reviews
-- save/bookmark stop
-- browse without account
-- OTP login for saving/reviewing
-- profile
+## Non-negotiables
 
-## Platform scope
-- iPhone only for v1
-- do not optimize for Android yet
-- keep future expansion possible, but prioritize iOS-first UX
+**Product language.** Never claim a place is safe. Banned as absolute claims: *safe stop,
+verified safe, guaranteed safe, crime-free, objectively safe*. Use: **Recommended Stop ·
+Good Option · Use Caution · Limited Data · better-reviewed · higher-confidence ·
+recent traveler feedback · area safety context.** Describe what travelers reported and how
+confident the data is — never assert a verdict. A hook blocks violations in `apps/mobile`.
+
+**Never fabricate** reviews, users, ratings, metrics, safety data, or locations as if real.
+Mock data must be clearly marked as mock.
+
+**Secrets.** Mobile uses the Supabase anon/public key only. A privileged server key never
+appears in app code, env files, or commands. Only `EXPO_PUBLIC_*` reaches the client bundle —
+never put a secret behind that prefix. Never log secrets, tokens, or precise coordinates.
+
+**Location data is sensitive.** No precise travel history stored or logged without an approved spec.
+
+**Ask the founder first** — these are the only things you must escalate:
+push/merge to `main` · destructive DB ops · dropping tables or columns · production schema or
+auth changes · privileged keys · paid APIs or large dependencies · architecture rewrites ·
+product-positioning changes · removing the mock fallback · storing sensitive location data ·
+production builds/deploys. Everything else is yours to decide.
+
+## Engineering
+
+TypeScript strict everywhere. Beginner-readable — the founder is learning from this code; prefer
+clear over clever. Small focused functions, small reusable components, reuse before adding.
+Comments only where they teach. Keep changes scoped: no opportunistic refactors. No new
+dependencies without approval.
+
+Before any non-trivial feature: restate the task → list files to create/update → describe data
+flow → state schema/env/package impact → define acceptance criteria → call out edge cases.
+
+**iOS-first.** iPhone only for v1; don't optimize for Android. Apple-clean, premium, maps-first,
+restrained feminine accent (`constants/theme.ts` — verify before hardcoding). Avoid clutter,
+social-feed vibes, fearmongering, cartoonish design.
+
+**A change to a screen is not verified because TypeScript compiled.** See the `ios-verify` skill.
 
 ## Stack
-- Expo
-- React Native
-- TypeScript
-- Expo Router
-- Supabase
-- Google Maps APIs
-- PostHog
-- Sentry
-- Zod
+Expo · React Native · TypeScript · Expo Router · Supabase (v1 backend — do not migrate) ·
+Google Maps APIs · PostHog · Sentry · Zod. Monorepo: `apps/mobile`, `packages/{ui,types,scoring}`
+(still empty), `docs`.
 
-## Repo structure
-- apps/mobile
-- packages/ui
-- packages/types
-- packages/scoring
-- docs
+## Commands (verified — from `apps/mobile/`)
+```bash
+npx tsc --noEmit          # typecheck — must pass
+npm run lint              # eslint — must pass
+npm test                  # jest-expo unit tests (__tests__/) — must pass
+npm run supabase:check    # live Supabase reads vs mock fallback
+npm run rls:check         # read-only anon-key RLS assertions
+npm run ios               # Simulator
+```
+Guard regression suite (from repo root): `python3 .claude/hooks/tests/test_guards.py`
+Unit tests: Jest via jest-expo (`apps/mobile/__tests__/`, pure `lib/` behaviour only). Maestro 2.10 installed (2026-09-10) — flows in `apps/mobile/.maestro/`, run with
+`maestro --device <udid> test <flow>`.
+Never run `npm run reset-project` (destroys the app).
 
-## Product wording rules
-Never describe a place as:
-- safe
-- guaranteed safe
-- verified safe
-- crime-free
+## Where things live
+| | |
+|---|---|
+| Orchestration playbook | `.claude/skills/herstop-orchestration/` |
+| iOS verification | `.claude/skills/ios-verify/` |
+| Specialist agents | `.claude/agents/` |
+| Deterministic guards | `.claude/hooks/` (+ `tests/test_guards.py`) |
+| Detailed rules | `.claude/rules/` |
+| Current state (start here) | `docs/agent-os/STATUS.md`, `docs/architecture/current-state.md` |
+| Feature artifacts | `docs/features/<name>/{intent,spec,plan,verification}.md` |
+| Migrations | `docs/migrations/` — migration-first, a human runs them |
 
-Prefer:
-- Recommended Stop
-- Good Option
-- Use Caution
-- Limited Data
-- higher confidence
-- better reviewed
-- recent travelers reported good lighting
-- limited recent data
-
-HerStop is decision support, not a guarantee.
-
-## Review model
-Structured reviews should include:
-- overall feeling
-- lighting
-- restroom quality
-- cleanliness
-- staff kindness
-- loitering concern / strange vibe
-- would stop again alone
-- short optional note
-- time of visit
-
-## Scoring model v1
-Use:
-- community reviews: 70%
-- area safety context: 20%
-- confidence score: 10%
-
-Low review count should force Limited Data.
-Weak lighting plus nighttime should lower recommendations.
-Repeated loitering concerns should lower recommendations strongly.
-
-## Engineering rules
-- Use TypeScript everywhere
-- Keep code beginner-readable
-- Prefer simple implementations over clever abstractions
-- Use small reusable components
-- Keep functions focused
-- Add comments only when they help learning
-- State files to create/update before implementation
-- State data flow before implementation
-- State schema/env impact before implementation
-- Mention package installs explicitly before adding them
-
-## Workflow rules
-Before implementing any non-trivial feature:
-1. restate the task
-2. list files to create/update
-3. describe data flow
-4. identify schema/env/package impact
-5. define acceptance criteria
-6. call out edge cases
-
-When debugging:
-- identify likely root causes first
-- avoid broad refactors unless necessary
-- prefer the smallest good fix
-- explain how to verify the fix
-
-## UI direction
-- Apple-clean
-- premium
-- maps-first
-- subtle, restrained feminine accent styling is okay
-- avoid overdesigned or gimmicky UI
-
-## Commands (verified — run from `apps/mobile/`)
-- Install: `npm install`
-- Typecheck: `npx tsc --noEmit`
-- Lint: `npm run lint`
-- Start / iOS: `npm start` · `npm run ios`
-- Confirm live Supabase reads vs mock: `npm run supabase:check`
-- No test runner yet (no Jest/Maestro). Do not claim tests pass. See `docs/agent-os/COMMANDS.md`.
-
-## Agent OS & workflow
-- Development harness lives in `docs/agent-os/` (start at `README.md`, then `STATUS.md`).
-- Enforceable rules: `.claude/rules/`. Agents: `.claude/agents/`. Skills: `.claude/skills/`.
-- **Audit before large changes** — repository reality overrides historical assumptions.
-- Prefer small, scoped changes. No unrelated refactors. No new deps without approval.
-- Do not push directly to `main`; merges to `main` need human approval.
-- Update `docs/agent-os/STATUS.md` after meaningful work.
-- Ground-truth architecture: `docs/architecture/current-state.md`.
-
-## Approval gates (must be human-approved)
-Push/merge to `main` · destructive DB ops · dropping tables/columns · production schema/auth changes ·
-service-role keys · paid APIs / large deps · architecture rewrites · product-positioning changes ·
-removing the mock fallback · storing sensitive location data.
-See `.claude/rules/agent-workflow-rules.md`.
-
-## Current project priority
-Focus on the mobile app first.
-The waitlist site will be a separate repo later.
-Immediate blocker: confirm live Supabase reads (`docs/features/db-live-reads/`).
+**Audit before large changes. Repository reality overrides these docs and overrides
+historical assumptions.** Update `docs/agent-os/STATUS.md` after meaningful work.

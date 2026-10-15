@@ -1,0 +1,39 @@
+# HerStop — core navigation smoke flow (Level 3).
+#
+# Written against the real screens as of 2026-09-10.
+#
+#   maestro test --device <UDID> apps/mobile/.maestro/smoke.yaml
+#
+# appId is the native Debug build (`npx expo prebuild`, then build + install on the
+# Simulator). Metro must be running on :8081 so the Debug app can load its bundle.
+appId: com.adityadas.herstop
+name: HerStop core navigation smoke
+---
+- launchApp:
+    clearState: false
+
+# Onboarding is the entry route. It may already be dismissed on a warm sim,
+# so treat it as optional rather than failing the whole flow.
+- extendedWaitUntil:
+    visible: "Get Started"
+    timeout: 30000
+- tapOn: "Get Started"
+
+# Explore — the primary screen.
+- assertVisible: ".*Explore.*"
+- assertVisible: "Where are you heading?"
+
+# Trust-and-safety language must never appear as an absolute claim.
+- assertNotVisible: "Verified safe"
+- assertNotVisible: "Safe stop"
+- assertNotVisible: "Crime-free"
+
+# Every tab renders.
+- tapOn: ".*Safety.*"
+- tapOn: ".*Journeys.*"
+- tapOn: "Saved, tab.*"
+- assertVisible: "Saved Stops"
+- tapOn: ".*Profile.*"
+- assertVisible: "Profile"
+
+- takeScreenshot: maestro-herstop-profile

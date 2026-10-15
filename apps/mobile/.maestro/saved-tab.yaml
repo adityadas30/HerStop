@@ -1,0 +1,31 @@
+# HerStop — Saved tab shows the guest sign-in invitation when signed out.
+#
+# clearState: true is deliberate here: this flow verifies the signed-out
+# empty state, so it needs a clean session rather than whatever the previous
+# flow left behind.
+#
+# Run with: maestro test --device <UDID> saved-tab.yaml
+appId: com.adityadas.herstop
+name: HerStop Saved tab guest invitation
+---
+- launchApp:
+    clearState: true
+
+- extendedWaitUntil:
+    visible: "Get Started"
+    timeout: 30000
+- tapOn: "Get Started"
+
+# Wait for Explore to render so the tab tap is not lost during cold start.
+- extendedWaitUntil:
+    visible: "Where are you heading?"
+    timeout: 20000
+- tapOn: "Saved, tab.*"
+# The Saved tab mounts lazily on first visit, so wait rather than assert instantly.
+- extendedWaitUntil:
+    visible: "Saved Stops"
+    timeout: 10000
+- assertVisible: "Save stops for later"
+- assertVisible: "Sign in"
+- assertNotVisible: "Verified safe"
+- takeScreenshot: maestro-herstop-saved-guest
