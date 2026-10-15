@@ -97,3 +97,21 @@ values
     3.5, 18,
     '#9BADB8'
   );
+
+-- ============================================================
+-- auth-otp-foundation (2026-09-06) — no schema change here
+--
+-- Email OTP sign-in (apps/mobile/lib/auth.ts) uses Supabase's built-in
+-- `auth.users` table — nothing to create. It does need email OTP enabled
+-- in the Supabase dashboard (founder action, not done by an agent):
+--   Authentication → Providers → Email → confirm "Email" is enabled
+--   Authentication → Email Templates → "Confirm signup" / "Magic Link"
+--     templates should include {{ .Token }} so users receive a 6-digit
+--     code (not just a magic-link URL) — verify this if `verifyOtp`
+--     rejects a code that looks correct.
+--
+-- No `profiles` table yet — deferred until a real feature needs it
+-- (e.g. a display name). A proposed schema exists for when that happens:
+-- see docs/migrations/002_auth_tables.sql (not applied).
+-- No `saved_stops` or `reviews` tables yet either — same file, same status.
+-- ============================================================

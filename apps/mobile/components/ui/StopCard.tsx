@@ -1,87 +1,93 @@
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { IconSymbol } from './icon-symbol';
+import { ScoreBadge } from './ScoreBadge';
 import { Colors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useSavedStops } from '@/contexts/saved-stops';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { StopData } from '@/data/mock-stops';
+import { formatDistance } from '@/lib/location';
+import { reviewCountLabel, scoreStop } from '@/lib/scoring';
+import type { ReviewStats } from '@/lib/types';
 
 export type { StopData };
 
 interface StopCardProps {
   stop: StopData;
+  /** This stop's aggregate review stats. Omit (or undefined) shows Limited Data,
+   * which is what a screen that hasn't fetched stats yet should pass. */
+  stats?: ReviewStats;
+  /** Real distance from the device's current position, in miles. Omit
+   * (or undefined) hides the distance line rather than showing a guess. */
+  distanceMiles?: number;
   onPress?: () => void;
 }
 
-export function StopCard({ stop, onPress }: StopCardProps) {
+export function StopCard({ stop, stats, distanceMiles, onPress }: StopCardProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const { isSaved, toggleSaved } = useSavedStops();
   const bookmarked = isSaved(stop.id);
 
-  const isRecommended = stop.badge === 'recommended';
+  const { label } = scoreStop(stats);
 
   return (
-    <TouchableOpacity activeOpacity={0.95} onPress={onPress}>
-      <View style={[styles.card, Shadows.md, { backgroundColor: colors.card }]}>
-        {/* Image placeholder */}
-        <View style={[styles.image, { backgroundColor: stop.imageColor }]}>
-          <IconSymbol name="photo.fill" size={28} color="rgba(255,255,255,0.3)" />
+    <View>
+      <TouchableOpacity testID={`stop-card-${stop.id}`} activeOpacity={0.95} onPress={onPress}>
+        <View style={[styles.card, Shadows.md, { backgroundColor: colors.card }]}>
+          {/* Image placeholder */}
+          <View style={[styles.image, { backgroundColor: stop.imageColor }]}>
+            <IconSymbol name="photo.fill" size={28} color="rgba(255,255,255,0.3)" />
+          </View>
 
-          {/* Bookmark */}
-          <TouchableOpacity
-            style={[styles.bookmarkBtn, { backgroundColor: colors.tint }]}
-            onPress={() => toggleSaved(stop.id)}
-            activeOpacity={0.7}>
-            <IconSymbol
-              name={bookmarked ? 'bookmark.fill' : 'bookmark'}
-              size={16}
-              color="#FFFFFF"
-            />
-          </TouchableOpacity>
-        </View>
-
-        {/* Content */}
-        <View style={styles.content}>
-          {/* Badge + distance */}
-          <View style={styles.metaRow}>
-            <View
-              style={[
-                styles.badge,
-                { backgroundColor: isRecommended ? colors.tintLight : colors.surfaceAlt },
-              ]}>
-              <Text
-                style={[
-                  styles.badgeText,
-                  { color: isRecommended ? colors.tint : colors.secondaryText },
-                ]}>
-                {isRecommended ? 'RECOMMENDED STOP' : 'GOOD OPTION'}
+          {/* Content */}
+          <View style={styles.content}>
+            {/* Badge + review count */}
+            <View style={styles.metaRow}>
+              <ScoreBadge label={label} />
+              <Text style={[styles.reviewLine, { color: colors.secondaryText }]}>
+                {reviewCountLabel(stats?.review_count ?? 0)}
               </Text>
             </View>
-            <Text style={[styles.distance, { color: colors.secondaryText }]}>
-              {stop.distance}
+
+            {/* Title */}
+            <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>
+              {stop.name}
             </Text>
-          </View>
 
-          {/* Title */}
-          <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>
-            {stop.name}
-          </Text>
+            {distanceMiles !== undefined && (
+              <Text style={[styles.distance, { color: colors.secondaryText }]}>
+                {formatDistance(distanceMiles)}
+              </Text>
+            )}
 
-          {/* Tags */}
-          <View style={styles.tagsRow}>
-            {stop.tags.map((tag) => (
-              <View key={tag.label} style={[styles.tag, { borderColor: colors.border }]}>
-                <IconSymbol name={tag.icon} size={12} color={colors.secondaryText} />
-                <Text style={[styles.tagText, { color: colors.secondaryText }]}>
-                  {tag.label.toUpperCase()}
-                </Text>
-              </View>
-            ))}
+            {/* Tags */}
+            <View style={styles.tagsRow}>
+              {stop.tags.map((tag) => (
+                <View key={tag.label} style={[styles.tag, { borderColor: colors.border }]}>
+                  <IconSymbol name={tag.icon} size={12} color={colors.secondaryText} />
+                  <Text style={[styles.tagText, { color: colors.secondaryText }]}>
+                    {tag.label.toUpperCase()}
+                  </Text>
+                </View>
+              ))}
+            </View>
           </View>
         </View>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+
+      {/* Bookmark sits beside the card, not inside it: a button nested in an accessible
+          card is hidden from VoiceOver and UI tests on iOS. */}
+      <TouchableOpacity
+        testID={`stop-card-bookmark-${stop.id}`}
+        accessibilityRole="button"
+        accessibilityLabel={bookmarked ? 'Remove saved stop' : 'Save stop'}
+        style={[styles.bookmarkBtn, { backgroundColor: colors.tint }]}
+        onPress={() => toggleSaved(stop.id)}
+        activeOpacity={0.7}>
+        <IconSymbol name={bookmarked ? 'bookmark.fill' : 'bookmark'} size={16} color="#FFFFFF" />
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -115,16 +121,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  badge: {
-    paddingVertical: Spacing.xs,
-    paddingHorizontal: Spacing.smd,
-    borderRadius: Radius.full,
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: '700' as const,
-    letterSpacing: 0.6,
-    lineHeight: 14,
+  reviewLine: {
+    ...Typography.caption,
   },
   distance: {
     ...Typography.caption,
