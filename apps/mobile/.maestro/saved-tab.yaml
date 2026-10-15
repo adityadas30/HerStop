@@ -5,33 +5,26 @@
 # flow left behind.
 #
 # Run with: maestro test --device <UDID> saved-tab.yaml
-appId: host.exp.Exponent
+appId: com.adityadas.herstop
 name: HerStop Saved tab guest invitation
 ---
 - launchApp:
     clearState: true
 
-# See smoke.yaml for why this uses extendedWaitUntil + optional tapOn rather
-# than `runFlow: when: visible` (that pattern raced ahead of the Expo Go home
-# screen actually rendering and silently skipped a real element).
-- extendedWaitUntil:
-    visible: "HerStop"
-    timeout: 8000
-    optional: true
-- tapOn:
-    text: "HerStop"
-    optional: true
-
 - extendedWaitUntil:
     visible: "Get Started"
-    timeout: 5000
-    optional: true
-- tapOn:
-    text: "Get Started"
-    optional: true
+    timeout: 30000
+- tapOn: "Get Started"
 
-- tapOn: ".*Saved.*"
-- assertVisible: "Saved Stops"
+# Wait for Explore to render so the tab tap is not lost during cold start.
+- extendedWaitUntil:
+    visible: "Where are you heading?"
+    timeout: 20000
+- tapOn: "Saved, tab.*"
+# The Saved tab mounts lazily on first visit, so wait rather than assert instantly.
+- extendedWaitUntil:
+    visible: "Saved Stops"
+    timeout: 10000
 - assertVisible: "Save stops for later"
 - assertVisible: "Sign in"
 - assertNotVisible: "Verified safe"

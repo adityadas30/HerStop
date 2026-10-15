@@ -1,41 +1,52 @@
-# HerStop — browse a stop and save it (Level 3).
+# HerStop — browse a stop and save it (Level 3, guest path).
 #
-# STATUS: staged, not yet runnable (Maestro not installed).
+# Run with: maestro --device <UDID> test save-stop.yaml
 #
-# This flow covers the guest path only. Persisted saving requires a signed-in user
-# AND migration 002_auth_tables.sql to have been applied; until then a signed-in
-# save rolls back by design, so asserting persistence here would be a false failure.
-appId: host.exp.Exponent
-name: HerStop open a stop and save it
+# Guest saving only works from the Explore list. The bookmark on a stop card
+# (testID `stop-card-bookmark-<id>`) saves in memory for guests. The bookmark on
+# the detail screen (`stop-detail-bookmark`) sends a guest to sign in on
+# Profile instead, so this flow does not use it. The signed-in path is covered
+# by saved-persistence.yaml.
+#
+# Guest saves live in memory only, so the Saved tab should show the stop
+# alongside the "Keep these stops" sign-in invitation.
+#
+# clearState: true is deliberate: the bookmark is a toggle, so a stop left saved
+# by an earlier run would be unsaved by this one and fail the Saved-tab check.
+appId: com.adityadas.herstop
+name: HerStop open a stop and save it (guest path)
 ---
 - launchApp:
-    clearState: false
+    clearState: true
 
-- runFlow:
-    when:
-      visible: "Get Started"
-    commands:
-      - tapOn: "Get Started"
+- extendedWaitUntil:
+    visible: "Get Started"
+    timeout: 30000
+- tapOn: "Get Started"
 
-- assertVisible: "Explore"
+- assertVisible: ".*Explore.*"
 
-# Open the first stop card in the list.
+# Open the first stop card. The pattern skips `stop-card-bookmark-*` ids, which
+# would otherwise also match "stop-card-.*".
 - tapOn:
+    id: "stop-card-(?!bookmark-).*"
     index: 0
-    text: ".*"
-    optional: false
-- takeScreenshot: /tmp/maestro-herstop-stop-detail
+- takeScreenshot: maestro-herstop-stop-detail
 
 # The detail screen must describe reported experience, never assert safety.
 - assertNotVisible: "Verified safe"
 - assertNotVisible: "Guaranteed"
+- tapOn: "Back"
 
-# Save it, then confirm it shows up in the Saved tab.
+# Save the first stop from its card bookmark, then confirm it in the Saved tab.
 - tapOn:
-    id: "save-stop-button"
-    optional: true
-- back
-- tapOn: "Saved"
-- assertVisible: "Saved Stops"
+    id: "stop-card-bookmark-.*"
+    index: 0
+- tapOn: "Saved, tab.*"
+# The Saved tab mounts lazily on first visit, so wait rather than assert instantly.
+- extendedWaitUntil:
+    visible: "Saved Stops"
+    timeout: 10000
+- assertVisible: "Keep these stops"
 - assertNotVisible: "No saved stops yet"
-- takeScreenshot: /tmp/maestro-herstop-saved
+- takeScreenshot: maestro-herstop-saved

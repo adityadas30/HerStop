@@ -8,7 +8,7 @@
 # nothing in between that force-quits or reboots the app/simulator.
 #
 # Run with: maestro test --device <UDID> -e OTP=12345678 auth-enter-code.yaml
-appId: host.exp.Exponent
+appId: com.adityadas.herstop
 name: HerStop verify an OTP email code
 ---
 - assertVisible: "Enter the code sent to your email"

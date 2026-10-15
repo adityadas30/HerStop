@@ -7,7 +7,7 @@
 # with no guest "Sign in" invitation flashing during the restore.
 #
 # Run with: maestro test --device <UDID> saved-persistence.yaml
-appId: host.exp.Exponent
+appId: com.adityadas.herstop
 name: HerStop saved stop persists across a relaunch (signed-in path)
 ---
 - tapOn: ".*Explore.*"
@@ -23,7 +23,7 @@ name: HerStop saved stop persists across a relaunch (signed-in path)
     id: "stop-detail-bookmark"
 - tapOn: "Back"
 
-- tapOn: ".*Saved.*"
+- tapOn: "Saved, tab.*"
 - assertVisible: "Saved Stops"
 - assertNotVisible: "No saved stops yet"
 - assertNotVisible: "Sign in"
@@ -32,15 +32,8 @@ name: HerStop saved stop persists across a relaunch (signed-in path)
 # The real persistence check: kill and relaunch, then look again.
 - launchApp:
     clearState: false
-- extendedWaitUntil:
-    visible: "HerStop"
-    timeout: 8000
-    optional: true
-- tapOn:
-    text: "HerStop"
-    optional: true
 - takeScreenshot: maestro-herstop-relaunch-immediate
-- tapOn: ".*Saved.*"
+- tapOn: "Saved, tab.*"
 - assertVisible: "Saved Stops"
 - assertNotVisible: "No saved stops yet"
 - assertNotVisible: "Sign in"

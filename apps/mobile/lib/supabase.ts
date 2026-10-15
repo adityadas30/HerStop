@@ -13,7 +13,9 @@ export const supabaseConfigured =
   !supabaseAnonKey.includes('your-anon-key');
 
 if (__DEV__ && !supabaseConfigured) {
-  console.warn(
+  // An expected state, not a fault: console.log keeps it in Metro without the
+  // yellow warning toast that covers the tab bar. Real failures stay console.warn.
+  console.log(
     '[supabase] MOCK MODE — missing or placeholder credentials in apps/mobile/.env. ' +
       'Run `npm run supabase:check` to diagnose.',
   );

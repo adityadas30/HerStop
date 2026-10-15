@@ -4,40 +4,20 @@
 #
 #   maestro test --device <UDID> apps/mobile/.maestro/smoke.yaml
 #
-# appId is Expo Go, because the app has no ios.bundleIdentifier yet and runs
-# through `npx expo start --ios`. Switch to the real bundle id once a dev client
-# or standalone build exists.
-appId: host.exp.Exponent
+# appId is the native Debug build (`npx expo prebuild`, then build + install on the
+# Simulator). Metro must be running on :8081 so the Debug app can load its bundle.
+appId: com.adityadas.herstop
 name: HerStop core navigation smoke
 ---
 - launchApp:
     clearState: false
 
-# Maestro's launchApp relaunches Expo Go itself, not the last-opened project
-# (clearState: false does not auto-resume the JS bundle) — it lands on Expo
-# Go's home screen with a "Recently opened > HerStop" row. `runFlow: when:
-# visible` checks instantly (before the Expo Go home screen has finished
-# drawing) and was observed to skip a real, about-to-appear element, so this
-# uses extendedWaitUntil + an optional tap instead: it waits for either
-# state, and does nothing (no failure) if that state never shows because the
-# app resumed directly into the project.
-- extendedWaitUntil:
-    visible: "HerStop"
-    timeout: 8000
-    optional: true
-- tapOn:
-    text: "HerStop"
-    optional: true
-
 # Onboarding is the entry route. It may already be dismissed on a warm sim,
 # so treat it as optional rather than failing the whole flow.
 - extendedWaitUntil:
     visible: "Get Started"
-    timeout: 5000
-    optional: true
-- tapOn:
-    text: "Get Started"
-    optional: true
+    timeout: 30000
+- tapOn: "Get Started"
 
 # Explore — the primary screen.
 - assertVisible: ".*Explore.*"
@@ -51,7 +31,7 @@ name: HerStop core navigation smoke
 # Every tab renders.
 - tapOn: ".*Safety.*"
 - tapOn: ".*Journeys.*"
-- tapOn: ".*Saved.*"
+- tapOn: "Saved, tab.*"
 - assertVisible: "Saved Stops"
 - tapOn: ".*Profile.*"
 - assertVisible: "Profile"

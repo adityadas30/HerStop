@@ -32,61 +32,62 @@ export function StopCard({ stop, stats, distanceMiles, onPress }: StopCardProps)
   const { label } = scoreStop(stats);
 
   return (
-    <TouchableOpacity testID={`stop-card-${stop.id}`} activeOpacity={0.95} onPress={onPress}>
-      <View style={[styles.card, Shadows.md, { backgroundColor: colors.card }]}>
-        {/* Image placeholder */}
-        <View style={[styles.image, { backgroundColor: stop.imageColor }]}>
-          <IconSymbol name="photo.fill" size={28} color="rgba(255,255,255,0.3)" />
-
-          {/* Bookmark */}
-          <TouchableOpacity
-            testID={`stop-card-bookmark-${stop.id}`}
-            style={[styles.bookmarkBtn, { backgroundColor: colors.tint }]}
-            onPress={() => toggleSaved(stop.id)}
-            activeOpacity={0.7}>
-            <IconSymbol
-              name={bookmarked ? 'bookmark.fill' : 'bookmark'}
-              size={16}
-              color="#FFFFFF"
-            />
-          </TouchableOpacity>
-        </View>
-
-        {/* Content */}
-        <View style={styles.content}>
-          {/* Badge + review count */}
-          <View style={styles.metaRow}>
-            <ScoreBadge label={label} />
-            <Text style={[styles.reviewLine, { color: colors.secondaryText }]}>
-              {reviewCountLabel(stats?.review_count ?? 0)}
-            </Text>
+    <View>
+      <TouchableOpacity testID={`stop-card-${stop.id}`} activeOpacity={0.95} onPress={onPress}>
+        <View style={[styles.card, Shadows.md, { backgroundColor: colors.card }]}>
+          {/* Image placeholder */}
+          <View style={[styles.image, { backgroundColor: stop.imageColor }]}>
+            <IconSymbol name="photo.fill" size={28} color="rgba(255,255,255,0.3)" />
           </View>
 
-          {/* Title */}
-          <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>
-            {stop.name}
-          </Text>
+          {/* Content */}
+          <View style={styles.content}>
+            {/* Badge + review count */}
+            <View style={styles.metaRow}>
+              <ScoreBadge label={label} />
+              <Text style={[styles.reviewLine, { color: colors.secondaryText }]}>
+                {reviewCountLabel(stats?.review_count ?? 0)}
+              </Text>
+            </View>
 
-          {distanceMiles !== undefined && (
-            <Text style={[styles.distance, { color: colors.secondaryText }]}>
-              {formatDistance(distanceMiles)}
+            {/* Title */}
+            <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>
+              {stop.name}
             </Text>
-          )}
 
-          {/* Tags */}
-          <View style={styles.tagsRow}>
-            {stop.tags.map((tag) => (
-              <View key={tag.label} style={[styles.tag, { borderColor: colors.border }]}>
-                <IconSymbol name={tag.icon} size={12} color={colors.secondaryText} />
-                <Text style={[styles.tagText, { color: colors.secondaryText }]}>
-                  {tag.label.toUpperCase()}
-                </Text>
-              </View>
-            ))}
+            {distanceMiles !== undefined && (
+              <Text style={[styles.distance, { color: colors.secondaryText }]}>
+                {formatDistance(distanceMiles)}
+              </Text>
+            )}
+
+            {/* Tags */}
+            <View style={styles.tagsRow}>
+              {stop.tags.map((tag) => (
+                <View key={tag.label} style={[styles.tag, { borderColor: colors.border }]}>
+                  <IconSymbol name={tag.icon} size={12} color={colors.secondaryText} />
+                  <Text style={[styles.tagText, { color: colors.secondaryText }]}>
+                    {tag.label.toUpperCase()}
+                  </Text>
+                </View>
+              ))}
+            </View>
           </View>
         </View>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+
+      {/* Bookmark sits beside the card, not inside it: a button nested in an accessible
+          card is hidden from VoiceOver and UI tests on iOS. */}
+      <TouchableOpacity
+        testID={`stop-card-bookmark-${stop.id}`}
+        accessibilityRole="button"
+        accessibilityLabel={bookmarked ? 'Remove saved stop' : 'Save stop'}
+        style={[styles.bookmarkBtn, { backgroundColor: colors.tint }]}
+        onPress={() => toggleSaved(stop.id)}
+        activeOpacity={0.7}>
+        <IconSymbol name={bookmarked ? 'bookmark.fill' : 'bookmark'} size={16} color="#FFFFFF" />
+      </TouchableOpacity>
+    </View>
   );
 }
 
