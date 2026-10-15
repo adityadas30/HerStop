@@ -60,12 +60,30 @@ npm run lint              # eslint — must pass
 npm test                  # jest-expo unit tests (__tests__/) — must pass
 npm run supabase:check    # live Supabase reads vs mock fallback
 npm run rls:check         # read-only anon-key RLS assertions
-npm run ios               # Simulator
+npm run ios               # starts Metro in dev-client mode (serves JS to the native app)
+npm run ios:build         # native Debug build + install on the booted Simulator (xcodebuild/simctl)
 ```
 Guard regression suite (from repo root): `python3 .claude/hooks/tests/test_guards.py`
 Unit tests: Jest via jest-expo (`apps/mobile/__tests__/`, pure `lib/` behaviour only). Maestro 2.10 installed (2026-09-10) — flows in `apps/mobile/.maestro/`, run with
 `maestro --device <udid> test <flow>`.
 Never run `npm run reset-project` (destroys the app).
+
+## Native iOS workflow (Expo CNG + Xcode + MobileBuildMCP)
+HerStop runs as its **own native app** (`com.adityadas.herstop`), not in Expo Go. We keep Expo
+Continuous Native Generation: `apps/mobile/ios/` is generated and **gitignored** — never commit it
+or hand-edit it. Native config lives in `app.json` and config plugins (`apps/mobile/plugins/`).
+- `apps/mobile/plugins/with-pod-min-deployment-target.js` raises CocoaPods targets below iOS 15.1
+  on every prebuild. Xcode 27 rejects lower targets. Keep it registered in `app.json`.
+- Order: `npx expo prebuild --platform ios --no-install` → `npm run ios:build` (runs `pod install`,
+  `xcodebuild`, `simctl install/launch`) → `npm run ios` in another terminal (the **one** Metro on :8081).
+- Do **not** use `expo run:ios` or `expo start --ios`: their Simulator lookup fails under Xcode 27.
+  Never run `expo prebuild --clean` over an `ios/` you have not backed up.
+- MobileBuildMCP (`/opt/homebrew/bin/mobilebuildmcp mcp`) may drive build, screenshots and UI
+  inspection; use one build and one Metro at a time. Set `SENTRY_DISABLE_AUTO_UPLOAD=true` locally.
+- Node: use the nvm Node (v24); Homebrew's `/opt/homebrew/bin/node` is currently broken.
+- Maestro flows target `appId: com.adityadas.herstop` and need Metro running. Guest flows
+  (`smoke`, `saved-tab`, `save-stop`) pass in mock mode; the three auth flows need live Supabase.
+- Founder test plan: `docs/features/native-ios-testing/manual-test-plan.md`.
 
 ## Where things live
 | | |
