@@ -32,19 +32,27 @@ describe('canGetDirections', () => {
 });
 
 describe('buildAppleMapsUrl', () => {
-  it('uses coordinates and the encoded name', () => {
+  it('navigates to the coordinates in driving mode', () => {
     expect(buildAppleMapsUrl(withCoords)).toBe(
-      'http://maps.apple.com/?daddr=37.7749,-122.4194&q=Rest%20%26%20Go',
+      'http://maps.apple.com/?daddr=37.7749,-122.4194&dirflg=d',
     );
   });
 
+  it('never adds a q= search term that could override the destination', () => {
+    expect(buildAppleMapsUrl(withCoords)).not.toContain('q=');
+    expect(buildAppleMapsUrl(withAddress)).not.toContain('q=');
+    expect(buildAppleMapsUrl({ ...withCoords, address: '1 Main St' })).not.toContain('q=');
+  });
+
   it('prefers coordinates over the address', () => {
-    expect(buildAppleMapsUrl({ ...withCoords, address: '1 Main St' })).toContain('daddr=37.7749,-122.4194');
+    expect(buildAppleMapsUrl({ ...withCoords, address: '1 Main St' })).toBe(
+      'http://maps.apple.com/?daddr=37.7749,-122.4194&dirflg=d',
+    );
   });
 
   it('falls back to the trimmed, encoded address', () => {
     expect(buildAppleMapsUrl(withAddress)).toBe(
-      'http://maps.apple.com/?daddr=1%20Main%20St%2C%20Oakland%2C%20CA&q=Rest%20%26%20Go',
+      'http://maps.apple.com/?daddr=1%20Main%20St%2C%20Oakland%2C%20CA&dirflg=d',
     );
   });
 
@@ -68,6 +76,25 @@ describe('buildGoogleMapsUrl', () => {
 
   it('is null with nothing to navigate to', () => {
     expect(buildGoogleMapsUrl({ name: 'x' })).toBeNull();
+  });
+});
+
+describe('Apple and Google links agree on the destination', () => {
+  function appleDestination(url: string): string {
+    return decodeURIComponent(new URL(url).searchParams.get('daddr') ?? '');
+  }
+  function googleDestination(url: string): string {
+    return new URL(url).searchParams.get('destination') ?? '';
+  }
+
+  it.each([
+    ['coordinates', withCoords],
+    ['address only', withAddress],
+    ['coordinates and address', { ...withCoords, address: '1 Main St' }],
+  ])('with %s', (_label, stop) => {
+    const apple = buildAppleMapsUrl(stop)!;
+    const google = buildGoogleMapsUrl(stop)!;
+    expect(appleDestination(apple)).toBe(googleDestination(google));
   });
 });
 

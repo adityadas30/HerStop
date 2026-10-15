@@ -22,26 +22,33 @@ export function canGetDirections(stop: DirectionsTarget): boolean {
 }
 
 /**
- * Apple Maps link: real coordinates when we have them, otherwise the address
- * as a search query. Null when the stop has neither.
+ * Where to navigate: the stop's own coordinates when we have them, otherwise
+ * its address. Apple and Google links both use this, so they always agree.
+ */
+function destinationFor(stop: DirectionsTarget): string | null {
+  if (hasCoords(stop)) return `${stop.latitude},${stop.longitude}`;
+  if (hasAddress(stop)) return stop.address!.trim();
+  return null;
+}
+
+/**
+ * Apple Maps driving directions to the stop. Null when there is nowhere to go.
+ *
+ * Deliberately no `q=` (search) parameter: Apple Maps treats `q` as text typed
+ * into its search box, so a stop name like "Willow Creek Plaza" got searched
+ * near the user and could replace the real destination with a different place.
  */
 export function buildAppleMapsUrl(stop: DirectionsTarget): string | null {
-  if (hasCoords(stop)) {
-    return `http://maps.apple.com/?daddr=${stop.latitude},${stop.longitude}&q=${encodeURIComponent(stop.name)}`;
-  }
-  if (hasAddress(stop)) {
-    return `http://maps.apple.com/?daddr=${encodeURIComponent(stop.address!.trim())}&q=${encodeURIComponent(stop.name)}`;
-  }
-  return null;
+  const destination = destinationFor(stop);
+  if (!destination) return null;
+  // Coordinates stay readable ("40.5,-74.2"); an address is URL-encoded.
+  const daddr = hasCoords(stop) ? destination : encodeURIComponent(destination);
+  return `http://maps.apple.com/?daddr=${daddr}&dirflg=d`;
 }
 
 /** Google Maps web link, used only if Apple Maps can't be opened. */
 export function buildGoogleMapsUrl(stop: DirectionsTarget): string | null {
-  const destination = hasCoords(stop)
-    ? `${stop.latitude},${stop.longitude}`
-    : hasAddress(stop)
-      ? stop.address!.trim()
-      : null;
+  const destination = destinationFor(stop);
   if (!destination) return null;
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
 }

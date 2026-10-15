@@ -41,22 +41,30 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen
               name="stop/[id]"
+              dangerouslySingular={(_name, params) => String(params.id ?? '')}
               options={{ title: 'Stop Details', headerBackTitle: 'Back' }}
             />
             <Stack.Screen
               name="review/[stopId]"
               options={{ presentation: 'modal', title: 'Write a Review' }}
             />
+            {/* `router.push` always adds a new screen, so a double tap on a link can
+                stack two copies of the same page — the first Back then shows the
+                same page again and looks dead. `dangerouslySingular` keeps at most
+                one copy of each legal screen (and of each stop id, above). */}
             <Stack.Screen
               name="legal/privacy"
+              dangerouslySingular
               options={{ title: 'Privacy Policy', headerBackTitle: 'Back' }}
             />
             <Stack.Screen
               name="legal/support"
+              dangerouslySingular
               options={{ title: 'Support', headerBackTitle: 'Back' }}
             />
             <Stack.Screen
               name="legal/safety-disclosure"
+              dangerouslySingular
               options={{ title: 'Safety Disclosure', headerBackTitle: 'Back' }}
             />
           </Stack>

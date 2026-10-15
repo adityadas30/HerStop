@@ -1,15 +1,28 @@
+import { useRouter } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Button } from '@/components/ui/Button';
 import type { LegalDocument } from '@/constants/legal-content';
 import { Colors, Spacing, Typography } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { backAction } from '@/lib/back-navigation';
 
 /** Scrolling read-only text screen shared by Privacy, Support and Safety Disclosure. */
 export function LegalScreen({ document }: { document: LegalDocument }) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+
+  // A back control that always works, in addition to the header's back
+  // button: if this screen has nothing underneath it, go to Profile (where the
+  // legal links live) instead of doing nothing.
+  function handleBackPress() {
+    const action = backAction(router.canGoBack(), '/(tabs)/profile');
+    if (action.type === 'back') router.back();
+    else router.replace(action.href);
+  }
 
   return (
     <ScrollView
@@ -31,6 +44,15 @@ export function LegalScreen({ document }: { document: LegalDocument }) {
           ))}
         </View>
       ))}
+      <Button
+        testID="legal-back"
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+        label="Back"
+        variant="ghost"
+        onPress={handleBackPress}
+        fullWidth
+      />
     </ScrollView>
   );
 }

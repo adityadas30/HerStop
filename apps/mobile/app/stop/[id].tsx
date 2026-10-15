@@ -22,6 +22,7 @@ import { useSavedStops } from '@/contexts/saved-stops';
 import type { StopData } from '@/data/mock-stops';
 import { getStopById, getStopReviews, getStopReviewStats, hideReview, reportReview, wasReviewedThisSession } from '@/lib/api';
 import { canGetDirections, openDirections } from '@/lib/directions';
+import { canToggleSave } from '@/lib/saved-view';
 import { distanceMiles, formatDistance, getCurrentCoords, type Coords } from '@/lib/location';
 import { reviewCountLabel, scoreStop } from '@/lib/scoring';
 import type { ReportReason, Review, ReviewStats } from '@/lib/types';
@@ -70,9 +71,9 @@ export default function StopDetailScreen() {
   const [loadStatus, setLoadStatus] = useState<'ok' | 'not_found' | 'error'>('ok');
   const [feedback, setFeedback] = useState<FeedbackState>(INITIAL_FEEDBACK);
   const [coords, setCoords] = useState<Coords | null>(null);
-  // Set when a guest taps save: what they wanted to save, held until they're back
-  // from signing in.
-  const [pendingSaveId, setPendingSaveId] = useState<string | null>(null);
+  // Guests and signed-in users save the same way (guests: in memory for this
+  // session). The bookmark only waits while a saved list is being restored.
+  const saveEnabled = canToggleSave({ authLoading, savedLoading });
 
   const loadStop = useCallback(() => {
     setLoading(true);
@@ -111,37 +112,19 @@ export default function StopDetailScreen() {
   );
 
   function handleSavePress(stopId: string) {
+    if (!saveEnabled) return; // the button is disabled then; this is just a backstop
+    toggleSaved(stopId);
+  }
+
+  function handleWriteReviewPress() {
+    if (!stop) return;
     // Auth is still restoring the session — we don't yet know if there's a
     // signed-in user, so ignore the tap rather than guessing guest and
     // routing away from this screen.
     if (authLoading) return;
     if (isGuest) {
-      // Browsing stays open to everyone; only saving needs an account. Send them
-      // to the sign-in flow on Profile and finish the save when they return.
-      // `push` (not `navigate`) on purpose: it keeps this screen mounted underneath,
-      // which is what lets the effect below complete the save afterwards.
-      setPendingSaveId(stopId);
-      router.push('/profile');
-      return;
-    }
-    toggleSaved(stopId);
-  }
-
-  // Finish a guest's save once they're signed in — but only after their existing
-  // saved list has loaded, so this save isn't overwritten by the restore.
-  useEffect(() => {
-    if (!pendingSaveId || isGuest || savedLoading) return;
-    setPendingSaveId(null);
-    if (!isSaved(pendingSaveId)) toggleSaved(pendingSaveId);
-  }, [pendingSaveId, isGuest, savedLoading, isSaved, toggleSaved]);
-
-  function handleWriteReviewPress() {
-    if (!stop) return;
-    // Auth is still restoring — same reasoning as handleSavePress above.
-    if (authLoading) return;
-    if (isGuest) {
-      // Guest → sign in on Profile → they land back on this screen (same
-      // pattern as guest save), and can tap the button again once signed in.
+      // Writing a review needs an account. Guest → sign in on Profile → they
+      // land back on this screen and can tap the button again once signed in.
       router.push('/profile');
       return;
     }
@@ -233,7 +216,15 @@ export default function StopDetailScreen() {
         {/* Bookmark */}
         <TouchableOpacity
           testID="stop-detail-bookmark"
-          style={[styles.bookmarkBtn, { backgroundColor: colors.tint }]}
+          accessibilityRole="button"
+          accessibilityLabel={isSaved(stop.id) ? 'Remove saved stop' : 'Save stop'}
+          accessibilityState={{ disabled: !saveEnabled, busy: !saveEnabled }}
+          disabled={!saveEnabled}
+          style={[
+            styles.bookmarkBtn,
+            { backgroundColor: colors.tint },
+            !saveEnabled && styles.bookmarkBtnWaiting,
+          ]}
           onPress={() => handleSavePress(stop.id)}
           activeOpacity={0.7}>
           <IconSymbol
@@ -385,6 +376,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  bookmarkBtnWaiting: {
+    opacity: 0.5,
   },
   body: {
     paddingHorizontal: Spacing.screen,

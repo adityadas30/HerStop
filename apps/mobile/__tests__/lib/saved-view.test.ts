@@ -1,4 +1,18 @@
-import { shouldShowEmptySavedState, withSavedState } from '@/lib/saved-view';
+import { canToggleSave, shouldShowEmptySavedState, withSavedState } from '@/lib/saved-view';
+
+describe('canToggleSave', () => {
+  it('allows saving once nothing is restoring (guest or signed in alike)', () => {
+    expect(canToggleSave({ authLoading: false, savedLoading: false })).toBe(true);
+  });
+
+  it('waits while auth is restoring the session', () => {
+    expect(canToggleSave({ authLoading: true, savedLoading: false })).toBe(false);
+  });
+
+  it('waits while the saved list is loading, so the restore cannot wipe the tap', () => {
+    expect(canToggleSave({ authLoading: false, savedLoading: true })).toBe(false);
+  });
+});
 
 describe('withSavedState', () => {
   it('adds and removes an id without mutating the original', () => {
