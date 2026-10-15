@@ -83,7 +83,8 @@
           "locationWhenInUsePermission": "HerStop uses your location to sort nearby stops by real distance. Your location is never stored or sent anywhere."
         }
       ],
-      "@sentry/react-native"
+      "@sentry/react-native",
+      "./plugins/with-pod-min-deployment-target"
     ],
     "experiments": {
       "typedRoutes": true,
