@@ -133,3 +133,27 @@ describe('openDirections', () => {
     expect(openURL).not.toHaveBeenCalled();
   });
 });
+
+describe('demo (mock) stops', () => {
+  const demo = { ...withCoords, address: '1420 Willow Creek Rd', isMock: true };
+
+  it('has no directions, even with coordinates and an address', () => {
+    expect(canGetDirections(demo)).toBe(false);
+    expect(buildAppleMapsUrl(demo)).toBeNull();
+    expect(buildGoogleMapsUrl(demo)).toBeNull();
+  });
+
+  it('never opens a maps app', async () => {
+    const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    await expect(openDirections(demo)).resolves.toBe(false);
+    expect(openURL).not.toHaveBeenCalled();
+    openURL.mockRestore();
+  });
+
+  it('does not disable real stops: unset or false isMock keeps navigation', () => {
+    expect(canGetDirections(withCoords)).toBe(true);
+    expect(canGetDirections({ ...withCoords, isMock: false })).toBe(true);
+    expect(buildAppleMapsUrl({ ...withCoords, isMock: false })).toContain('daddr=37.7749,-122.4194');
+    expect(buildGoogleMapsUrl({ ...withCoords, isMock: false })).toContain('destination=');
+  });
+});

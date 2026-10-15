@@ -260,6 +260,12 @@ export default function StopDetailScreen() {
           <Button label="Directions" onPress={handleDirectionsPress} fullWidth />
         )}
 
+        {stop.isMock && (
+          <Text style={[styles.syncError, { color: colors.secondaryText }]}>
+            Demo stop: this is sample data, not a real place, so directions are not available.
+          </Text>
+        )}
+
         {syncError && (
           <Text style={[styles.syncError, { color: colors.secondaryText }]}>{syncError}</Text>
         )}

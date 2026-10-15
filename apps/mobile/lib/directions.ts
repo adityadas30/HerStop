@@ -6,6 +6,8 @@ export interface DirectionsTarget {
   address?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  /** Fictional demo stop: there is no real place to navigate to. */
+  isMock?: boolean;
 }
 
 function hasCoords(stop: DirectionsTarget): stop is DirectionsTarget & { latitude: number; longitude: number } {
@@ -18,6 +20,7 @@ function hasAddress(stop: DirectionsTarget): boolean {
 
 /** True when we have something real to navigate to (coordinates or an address). */
 export function canGetDirections(stop: DirectionsTarget): boolean {
+  if (stop.isMock) return false;
   return hasCoords(stop) || hasAddress(stop);
 }
 
@@ -26,6 +29,7 @@ export function canGetDirections(stop: DirectionsTarget): boolean {
  * its address. Apple and Google links both use this, so they always agree.
  */
 function destinationFor(stop: DirectionsTarget): string | null {
+  if (stop.isMock) return null; // demo data: never send anyone to a made-up address
   if (hasCoords(stop)) return `${stop.latitude},${stop.longitude}`;
   if (hasAddress(stop)) return stop.address!.trim();
   return null;

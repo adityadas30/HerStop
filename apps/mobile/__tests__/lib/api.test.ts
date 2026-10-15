@@ -165,3 +165,17 @@ describe('getStopById', () => {
     expect((await getStopById('nope-nope')).status).toBe('not_found');
   });
 });
+
+describe('demo stops coming back from the database', () => {
+  it('marks seeded demo rows (ids shared with MOCK_STOPS) as isMock', async () => {
+    mockState.result = { data: [{ ...ROW, id: MOCK_STOPS[0].id }], error: null };
+    const { stops } = await getStops();
+    expect(stops[0].isMock).toBe(true);
+  });
+
+  it('leaves real catalog rows unmarked so navigation stays enabled', async () => {
+    mockState.result = { data: [{ ...ROW, id: 'osm-node-7759210731' }], error: null };
+    const { stops } = await getStops();
+    expect(stops[0].isMock).toBeUndefined();
+  });
+});

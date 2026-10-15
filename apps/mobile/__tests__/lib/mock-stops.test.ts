@@ -1,4 +1,4 @@
-import { MOCK_STOPS } from '@/data/mock-stops';
+import { isMockStopId, MOCK_STOPS } from '@/data/mock-stops';
 
 describe('MOCK_STOPS', () => {
   it('gives every stop finite, in-range coordinates', () => {
@@ -15,3 +15,16 @@ describe('MOCK_STOPS', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 });
+
+describe('explicit mock marking', () => {
+  it('marks every demo stop isMock', () => {
+    expect(MOCK_STOPS.every((stop) => stop.isMock === true)).toBe(true);
+  });
+
+  it('recognises demo ids and not real catalog ids', () => {
+    for (const stop of MOCK_STOPS) expect(isMockStopId(stop.id)).toBe(true);
+    expect(isMockStopId('osm-node-7759210731')).toBe(false);
+    expect(isMockStopId('stop-1')).toBe(false);
+  });
+});
+

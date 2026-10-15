@@ -16,6 +16,8 @@ export interface StopData {
   categories: string[];
   latitude: number;
   longitude: number;
+  /** True only for fictional demo stops. Real catalog stops leave this unset. */
+  isMock?: boolean;
 }
 
 export interface FilterOption {
@@ -42,7 +44,7 @@ export const FILTERS: FilterOption[] = [
 // Directions uses the coordinates, so a mock stop may open somewhere that
 // does not look like its address.
 
-export const MOCK_STOPS: StopData[] = [
+const MOCK_STOP_ROWS: StopData[] = [
   {
     id: '1',
     name: 'Willow Creek Plaza',
@@ -123,6 +125,20 @@ export const MOCK_STOPS: StopData[] = [
     ],
   },
 ];
+
+/** Every demo stop carries an explicit `isMock` marker (never inferred from missing reviews). */
+export const MOCK_STOPS: StopData[] = MOCK_STOP_ROWS.map((stop) => ({ ...stop, isMock: true }));
+
+const MOCK_STOP_IDS: ReadonlySet<string> = new Set(MOCK_STOPS.map((stop) => stop.id));
+
+/**
+ * True for ids that belong to the fictional demo catalog. docs/schema.sql seeds
+ * the same six rows into Supabase with these ids, so a database row can be a
+ * demo stop too. Real stops use other ids (e.g. "osm-node-…").
+ */
+export function isMockStopId(id: string): boolean {
+  return MOCK_STOP_IDS.has(id);
+}
 
 // ---------- Helpers ----------
 

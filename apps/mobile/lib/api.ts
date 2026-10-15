@@ -1,6 +1,6 @@
 import { SymbolViewProps } from 'expo-symbols';
 
-import { MOCK_STOPS, type StopData } from '@/data/mock-stops';
+import { isMockStopId, MOCK_STOPS, type StopData } from '@/data/mock-stops';
 import { supabase, supabaseConfigured } from './supabase';
 import type { ReportReason, Review, ReviewInput, ReviewStats, SavedStop, Stop } from './types';
 
@@ -21,6 +21,7 @@ function dbToStopData(row: Stop): StopData {
     categories: row.categories,
     latitude: row.latitude,
     longitude: row.longitude,
+    ...(isMockStopId(row.id) ? { isMock: true } : {}),
   };
 }
 
