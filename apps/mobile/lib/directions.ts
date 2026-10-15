@@ -34,9 +34,12 @@ function destinationFor(stop: DirectionsTarget): string | null {
 /**
  * Apple Maps driving directions to the stop. Null when there is nowhere to go.
  *
- * Deliberately no `q=` (search) parameter: Apple Maps treats `q` as text typed
- * into its search box, so a stop name like "Willow Creek Plaza" got searched
- * near the user and could replace the real destination with a different place.
+ * No `q=` (search) parameter: `q` is text typed into Apple Maps' search box, so a
+ * name could be searched instead of used as a label. (We checked on the iOS 26
+ * Simulator: with or without `q`, a mock stop's coordinates resolved to the same
+ * destination, so `q` was not the cause of the wrong address founders saw —
+ * that came from mock addresses not matching mock coordinates.) The trade-off:
+ * Maps shows the resolved address, not the stop's name.
  */
 export function buildAppleMapsUrl(stop: DirectionsTarget): string | null {
   const destination = destinationFor(stop);
