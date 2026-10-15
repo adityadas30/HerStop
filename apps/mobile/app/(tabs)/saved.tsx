@@ -9,6 +9,7 @@ import { Colors, Spacing, Typography } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth';
 import { useSavedStops } from '@/contexts/saved-stops';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { shouldShowEmptySavedState } from '@/lib/saved-view';
 
 export default function SavedScreen() {
   const colorScheme = useColorScheme();
@@ -77,7 +78,7 @@ export default function SavedScreen() {
             ))}
           </View>
         ) : (
-          !showGuestCard && (
+          shouldShowEmptySavedState({ hasStops, loading, showGuestCard, syncError }) && (
             <View style={styles.emptyState}>
               <Text style={styles.emptyIcon}>🔖</Text>
               <Text style={[styles.emptyTitle, { color: colors.text }]}>No saved stops yet</Text>

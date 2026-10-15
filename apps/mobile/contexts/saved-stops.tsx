@@ -12,6 +12,7 @@ import {
 import { useAuth } from '@/contexts/auth';
 import { type StopData } from '@/data/mock-stops';
 import { getSavedStops, getStops, toggleSaveStop } from '@/lib/api';
+import { withSavedState } from '@/lib/saved-view';
 
 interface SavedStopsContextValue {
   savedIds: ReadonlySet<string>;
@@ -98,12 +99,7 @@ export function SavedStopsProvider({ children }: { children: ReactNode }) {
 
       // Optimistic: the bookmark flips immediately for guests and signed-in
       // users alike, so the tap never feels laggy.
-      setSavedIds((prev) => {
-        const next = new Set(prev);
-        if (nextSaved) next.add(id);
-        else next.delete(id);
-        return next;
-      });
+      setSavedIds((prev) => withSavedState(prev, id, nextSaved));
       setSyncError(null);
 
       // Guests keep saves in memory for this session only — nothing to sync.
@@ -118,12 +114,7 @@ export function SavedStopsProvider({ children }: { children: ReactNode }) {
 
         // The write failed (offline, RLS, missing table). Put the bookmark back
         // where it was so the UI matches what Supabase actually stores.
-        setSavedIds((prev) => {
-          const next = new Set(prev);
-          if (nextSaved) next.delete(id);
-          else next.add(id);
-          return next;
-        });
+        setSavedIds((prev) => withSavedState(prev, id, !nextSaved));
         setSyncError(error);
       });
     },
