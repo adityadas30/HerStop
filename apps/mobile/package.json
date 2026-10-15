@@ -5,8 +5,9 @@
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
+    "android": "echo \"HerStop v1 is iPhone-only\" && exit 1",
+    "ios": "expo start --dev-client",
+    "ios:build": "bash ./scripts/ios-native.sh",
     "web": "expo start --web",
     "lint": "expo lint",
     "supabase:check": "node ./scripts/supabase-check.mjs",
