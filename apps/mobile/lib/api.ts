@@ -119,13 +119,15 @@ export async function getStopById(id: string): Promise<StopResult> {
  * the authorization, so a wrong value returns nothing rather than someone else's rows.
  *
  * Note there is no mock *data* fallback here: an empty list is a real answer
- * ("nothing saved yet"), so inventing saved stops would be wrong. On an error we
- * return an empty list and say so in the log.
+ * ("nothing saved yet"), so inventing saved stops would be wrong. Failures carry
+ * an error so callers can distinguish them from a genuinely empty saved list.
  */
-export async function getSavedStops(userId: string): Promise<SavedStop[]> {
+export async function getSavedStops(
+  userId: string,
+): Promise<{ savedStops: SavedStop[]; error: string | null }> {
   if (!supabaseConfigured) {
-    if (__DEV__) console.log('[getSavedStops] MOCK fallback (reason: supabase not configured)');
-    return [];
+    if (__DEV__) console.log('[getSavedStops] unavailable (reason: supabase not configured)');
+    return { savedStops: [], error: 'Saved-stop syncing is not configured.' };
   }
   try {
     const { data, error } = await supabase
@@ -136,10 +138,10 @@ export async function getSavedStops(userId: string): Promise<SavedStop[]> {
 
     if (error) throw error;
     if (__DEV__) console.log(`[getSavedStops] LIVE Supabase: ${data?.length ?? 0} rows`);
-    return (data ?? []) as SavedStop[];
-  } catch (e) {
-    if (__DEV__) console.warn('[getSavedStops] empty fallback (reason: Supabase error)', e);
-    return [];
+    return { savedStops: (data ?? []) as SavedStop[], error: null };
+  } catch {
+    if (__DEV__) console.warn('[getSavedStops] read failed');
+    return { savedStops: [], error: 'Could not load saved stops. Check your connection.' };
   }
 }
 
@@ -159,9 +161,9 @@ export async function toggleSaveStop(
 ): Promise<{ saved: boolean; error: string | null }> {
   if (!supabaseConfigured) {
     if (__DEV__) {
-      console.log(`[toggleSaveStop] MOCK (reason: supabase not configured) id=${stopId}`);
+      console.log('[toggleSaveStop] unavailable (reason: supabase not configured)');
     }
-    return { saved: nextSaved, error: null };
+    return { saved: !nextSaved, error: 'Saved-stop syncing is not configured.' };
   }
 
   const { data: sessionData } = await supabase.auth.getSession();

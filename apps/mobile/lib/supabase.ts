@@ -12,22 +12,37 @@ export const supabaseConfigured =
   supabaseAnonKey.length > 0 &&
   !supabaseAnonKey.includes('your-anon-key');
 
-if (!supabaseConfigured) {
+if (__DEV__ && !supabaseConfigured) {
   console.warn(
     '[supabase] MOCK MODE — missing or placeholder credentials in apps/mobile/.env. ' +
       'Run `npm run supabase:check` to diagnose.',
   );
 } else if (__DEV__) {
-  // Host only — never log the key.
-  const host = supabaseUrl.replace(/^https?:\/\//, '');
-  console.log(`[supabase] configured for host: ${host}`);
+  console.log('[supabase] configured');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage: AsyncStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
+// Keep imports and local auth reads usable without configuration. Any request
+// fails locally; placeholder credentials must never cause a network request.
+export const supabase = createClient(
+  supabaseConfigured ? supabaseUrl : 'https://supabase.invalid',
+  supabaseConfigured ? supabaseAnonKey : 'unconfigured',
+  {
+    global: supabaseConfigured ? undefined : {
+      // Answer with a 400 instead of throwing: the query client retries thrown
+      // network errors with backoff, which would make a local failure hang for seconds.
+      fetch: async () =>
+        new Response(
+          JSON.stringify({
+            message: 'Supabase is not configured. Sign-in and syncing are unavailable.',
+          }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } },
+        ),
+    },
+    auth: {
+      storage: supabaseConfigured ? AsyncStorage : undefined,
+      autoRefreshToken: supabaseConfigured,
+      persistSession: supabaseConfigured,
+      detectSessionInUrl: false,
+    },
   },
-});
+);

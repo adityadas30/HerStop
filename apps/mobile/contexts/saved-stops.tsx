@@ -84,9 +84,10 @@ export function SavedStopsProvider({ children }: { children: ReactNode }) {
     }
 
     setLoading(true);
-    getSavedStops(userId).then((rows) => {
+    getSavedStops(userId).then(({ savedStops: rows, error }) => {
       if (loadIdRef.current !== loadId) return; // signed out, or switched user
       setSavedIds(new Set(rows.map((row) => row.stop_id)));
+      setSyncError(error);
       setLoading(false);
     });
   }, [userId, authLoading]);
