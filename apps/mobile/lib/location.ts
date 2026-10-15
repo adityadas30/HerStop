@@ -32,8 +32,7 @@ export async function getLocation(): Promise<LocationResult> {
       status: 'granted',
       coords: { latitude: position.coords.latitude, longitude: position.coords.longitude },
     };
-  } catch (e) {
-    if (__DEV__) console.warn('[getLocation] failed', e);
+  } catch {
     return { status: 'unavailable' };
   }
 }

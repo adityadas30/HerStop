@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,7 +12,8 @@ import { StopsMap } from '@/components/StopsMap';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 import { FILTERS, type StopData } from '@/data/mock-stops';
 import { getStopReviewStats, getStops } from '@/lib/api';
-import { distanceMiles, getLocation, type Coords } from '@/lib/location';
+import { filterStops, getExploreLocationNote, getExploreResultCount, type ExploreLocationState } from '@/lib/explore';
+import { distanceMiles, getLocation } from '@/lib/location';
 import type { ReviewStats } from '@/lib/types';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -26,15 +27,13 @@ export default function DiscoverScreen() {
   const [stats, setStats] = useState<Map<string, ReviewStats>>(new Map());
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilters, setSelectedFilters] = useState<Set<string>>(new Set());
-  // Null until a real device fix comes back (or permission is denied, in which
-  // case it stays null forever — the list just isn't distance-sorted). Never
-  // guessed, never defaulted to a fake coordinate.
-  const [coords, setCoords] = useState<Coords | null>(null);
-  // Why there's no fix, once we know. Drives the small "turn on location" note.
-  const [locationIssue, setLocationIssue] = useState<'denied' | 'unavailable' | null>(null);
+  const [location, setLocation] = useState<ExploreLocationState>({ status: 'loading' });
+  const coords = location.status === 'granted' ? location.coords : null;
   const [loadError, setLoadError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [loading, setLoading] = useState(true);
+  const searchInputRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ScrollView>(null);
 
   const loadStops = useCallback(() => {
     setLoading(true);
@@ -53,14 +52,11 @@ export default function DiscoverScreen() {
 
   useEffect(() => {
     loadStops();
+    let active = true;
     getLocation().then((result) => {
-      if (result.status === 'granted') {
-        setCoords(result.coords);
-        setLocationIssue(null);
-      } else {
-        setLocationIssue(result.status);
-      }
+      if (active) setLocation(result);
     });
+    return () => { active = false; };
   }, [loadStops]);
 
   function toggleFilter(label: string) {
@@ -85,20 +81,7 @@ export default function DiscoverScreen() {
   }, [stops, coords]);
 
   const filteredStops = useMemo(() => {
-    let result = stops;
-
-    // Search by name or address
-    const q = searchQuery.trim().toLowerCase();
-    if (q) {
-      result = result.filter(
-        (s) => s.name.toLowerCase().includes(q) || s.address.toLowerCase().includes(q),
-      );
-    }
-
-    // Filter by selected categories (OR logic — match any)
-    if (selectedFilters.size > 0) {
-      result = result.filter((s) => s.categories.some((c) => selectedFilters.has(c)));
-    }
+    let result = filterStops({ stops, query: searchQuery, selectedFilters });
 
     // Sort by real distance once we have a real position; otherwise leave the
     // catalog's own order (alphabetical from the `stops` query) alone rather
@@ -114,63 +97,81 @@ export default function DiscoverScreen() {
 
   const controls = (
     <>
-        {/* ── Header ── */}
-        <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>HERSTOP</Text>
-          <View style={[styles.segmented, { backgroundColor: colors.surface }]}>
-            {(['list', 'map'] as const).map((mode) => {
-              const active = viewMode === mode;
-              return (
-                <TouchableOpacity
-                  key={mode}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                  accessibilityLabel={mode === 'list' ? 'List view' : 'Map view'}
-                  onPress={() => setViewMode(mode)}
-                  style={[styles.segment, active && { backgroundColor: colors.tint }]}>
-                  <Text style={[styles.segmentText, { color: active ? '#FFFFFF' : colors.text }]}>
-                    {mode === 'list' ? 'List' : 'Map'}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+      {/* ── Header ── */}
+      <View style={styles.header}>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>HERSTOP</Text>
+        <View style={[styles.segmented, { backgroundColor: colors.surface }]}>
+          {(['list', 'map'] as const).map((mode) => {
+            const active = viewMode === mode;
+            return (
+              <TouchableOpacity
+                key={mode}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={mode === 'list' ? 'List view' : 'Map view'}
+                onPress={() => {
+                  scrollRef.current?.scrollTo({ y: 0, animated: false });
+                  setViewMode(mode);
+                }}
+                style={[styles.segment, active && { backgroundColor: colors.tint }]}>
+                <Text style={[styles.segmentText, { color: active ? '#FFFFFF' : colors.text }]}>
+                  {mode === 'list' ? 'List' : 'Map'}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
+      </View>
 
-        {/* ── Search bar ── */}
-        <View style={[styles.searchBar, { backgroundColor: colors.surface }]}>
-          <IconSymbol name="magnifyingglass" size={16} color={colors.secondaryText} />
-          <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
-            placeholder="Where are you heading?"
-            placeholderTextColor={colors.secondaryText}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            returnKeyType="search"
-            autoCorrect={false}
+      {/* ── Search bar ── */}
+      <View style={[styles.searchBar, { backgroundColor: colors.surface }]}>
+        <IconSymbol name="magnifyingglass" size={16} color={colors.secondaryText} />
+        <TextInput
+          ref={searchInputRef}
+          testID="explore-search-input"
+          accessibilityLabel="Search stops by name or address"
+          style={[styles.searchInput, { color: colors.text }]}
+          placeholder="Where are you heading?"
+          placeholderTextColor={colors.secondaryText}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          returnKeyType="search"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity
+            testID="explore-search-clear"
+            accessibilityRole="button"
+            accessibilityLabel="Clear search"
+            onPress={() => {
+              setSearchQuery('');
+              searchInputRef.current?.focus();
+            }}
+            hitSlop={12}>
+            <IconSymbol name="xmark" size={16} color={colors.secondaryText} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* ── Filter chips ── */}
+      <ScrollView
+        horizontal
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="none"
+        style={styles.chipsScroll}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chipsRow}>
+        {FILTERS.map((f) => (
+          <FilterChip
+            key={f.label}
+            label={f.label}
+            icon={f.icon}
+            selected={selectedFilters.has(f.label)}
+            onPress={() => toggleFilter(f.label)}
           />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8}>
-              <IconSymbol name="xmark" size={16} color={colors.secondaryText} />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* ── Filter chips ── */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipsRow}>
-          {FILTERS.map((f) => (
-            <FilterChip
-              key={f.label}
-              label={f.label}
-              icon={f.icon}
-              selected={selectedFilters.has(f.label)}
-              onPress={() => toggleFilter(f.label)}
-            />
-          ))}
-        </ScrollView>
+        ))}
+      </ScrollView>
     </>
   );
 
@@ -217,85 +218,95 @@ export default function DiscoverScreen() {
       </View>
     );
 
-  const locationNote = locationIssue ? (
+  const locationMessage = getExploreLocationNote(location);
+  const resultCount = getExploreResultCount({
+    query: searchQuery,
+    selectedFilters,
+    count: filteredStops.length,
+  });
+  const showResultCount = catalogState !== 'loading' && catalogState !== 'error' && resultCount !== null;
+  const locationNote = locationMessage ? (
     <Text style={[styles.locationNote, { color: colors.secondaryText }]}>
-      {locationIssue === 'denied'
-        ? 'Turn on location to sort by distance'
-        : "Couldn't get your location, so stops aren't sorted by distance"}
+      {locationMessage}
     </Text>
   ) : null;
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      {viewMode === 'map' ? (
-        <View style={[styles.mapScreen, { paddingTop: insets.top + Spacing.sm }]}>
-          <View style={styles.mapControls}>
-            {controls}
-            {locationNote}
-          </View>
-          {stateView ? (
-            <View style={styles.mapState}>
-              {stateView}
-              <Text style={[styles.attribution, { color: colors.secondaryText }]}>
-                © OpenStreetMap contributors
-              </Text>
-            </View>
-          ) : (
-            <StopsMap
-              stops={filteredStops}
-              userCoords={coords}
-              onSelectStop={(id) => router.push(`/stop/${id}`)}
-            />
-          )}
-        </View>
-      ) : (
+      {/* Keep one controls tree mounted while the mode or catalog state changes. */}
       <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + Spacing.sm }]}
+        ref={scrollRef}
+        style={styles.content}
+        contentContainerStyle={[
+          viewMode === 'map' ? styles.mapScreen : styles.scrollContent,
+          { paddingTop: insets.top + Spacing.sm },
+        ]}
+        scrollEnabled={viewMode === 'list'}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled">
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={viewMode === 'list' ? 'on-drag' : 'none'}>
+        <View style={styles.controls}>
+          {controls}
+          {locationNote}
+          {showResultCount && (viewMode === 'map' || catalogState !== 'ready') ? (
+            <Text style={[styles.resultCount, { color: colors.secondaryText }]}>{resultCount}</Text>
+          ) : null}
+        </View>
+        {viewMode === 'map' ? (
+          <View style={styles.content}>
+            {stateView ? (
+              <View style={styles.mapState}>
+                {stateView}
+                <Text style={[styles.attribution, { color: colors.secondaryText }]}>
+                  © OpenStreetMap contributors
+                </Text>
+              </View>
+            ) : (
+              <StopsMap
+                stops={filteredStops}
+                userCoords={coords}
+                onSelectStop={(id) => router.push(`/stop/${id}`)}
+              />
+            )}
+          </View>
+        ) : (
+          <View style={styles.listContent}>
+            {stateView ?? (
+              <>
+                {/* ── Section header ── */}
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                    Recommended near you
+                  </Text>
+                  <Text style={[styles.sectionSubtitle, { color: colors.secondaryText }]}>
+                    {resultCount ?? (coords
+                      ? 'Sorted by distance from you'
+                      : 'Browse stops and recent traveler feedback')}
+                  </Text>
+                </View>
 
-        {controls}
+                {/* ── Stop cards ── */}
+                <View style={styles.cardsList}>
+                  {filteredStops.map((stop) => (
+                    <StopCard
+                      key={stop.id}
+                      stop={stop}
+                      stats={stats.get(stop.id)}
+                      distanceMiles={distances.get(stop.id)}
+                      onPress={() => router.push(`/stop/${stop.id}`)}
+                    />
+                  ))}
+                </View>
+              </>
+            )}
 
-        {locationNote}
-
-        {stateView ?? (
-          <>
-            {/* ── Section header ── */}
-            <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                Recommended near you
-              </Text>
-              <Text style={[styles.sectionSubtitle, { color: colors.secondaryText }]}>
-                {filteredStops.length !== stops.length
-                  ? `${filteredStops.length} stop${filteredStops.length !== 1 ? 's' : ''} found`
-                  : coords
-                    ? 'Sorted by distance from you'
-                    : 'Browse stops and recent traveler feedback'}
-              </Text>
-            </View>
-
-            {/* ── Stop cards ── */}
-            <View style={styles.cardsList}>
-              {filteredStops.map((stop) => (
-                <StopCard
-                  key={stop.id}
-                  stop={stop}
-                  stats={stats.get(stop.id)}
-                  distanceMiles={distances.get(stop.id)}
-                  onPress={() => router.push(`/stop/${stop.id}`)}
-                />
-              ))}
-            </View>
-          </>
+            {/* ── OSM attribution (ODbL requires this wherever the data is shown) ── */}
+            <Text style={[styles.attribution, { color: colors.secondaryText }]}>
+              © OpenStreetMap contributors
+            </Text>
+          </View>
         )}
-
-        {/* ── OSM attribution (ODbL requires this wherever the data is shown) ── */}
-        <Text style={[styles.attribution, { color: colors.secondaryText }]}>
-          © OpenStreetMap contributors
-        </Text>
       </ScrollView>
-      )}
 
       {/* ── Journey Shield (floating) ── */}
       <View style={[styles.shieldWrap, { paddingBottom: Spacing.sm }]}>
@@ -310,8 +321,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.screen,
     paddingBottom: 100,
+  },
+  content: {
+    flex: 1,
+  },
+  listContent: {
+    paddingHorizontal: Spacing.screen,
   },
 
   // Header
@@ -344,8 +360,9 @@ const styles = StyleSheet.create({
   mapScreen: {
     flex: 1,
   },
-  mapControls: {
+  controls: {
     paddingHorizontal: Spacing.screen,
+    flexShrink: 0,
   },
 
   // Search
@@ -365,6 +382,9 @@ const styles = StyleSheet.create({
   },
 
   // Chips
+  chipsScroll: {
+    flexGrow: 0,
+  },
   chipsRow: {
     gap: Spacing.sm,
     paddingBottom: Spacing.lg,
@@ -393,6 +413,11 @@ const styles = StyleSheet.create({
 
   locationNote: {
     ...Typography.small,
+    marginBottom: Spacing.md,
+  },
+  resultCount: {
+    ...Typography.body,
+    fontSize: 14,
     marginBottom: Spacing.md,
   },
   mapState: {

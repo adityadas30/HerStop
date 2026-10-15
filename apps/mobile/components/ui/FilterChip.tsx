@@ -18,6 +18,10 @@ export function FilterChip({ label, icon, selected = false, onPress }: FilterChi
 
   return (
     <TouchableOpacity
+      testID={`filter-chip-${label}`}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected }}
       activeOpacity={0.7}
       onPress={onPress}
       style={[
