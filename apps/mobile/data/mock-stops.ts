@@ -35,6 +35,12 @@ export const FILTERS: FilterOption[] = [
 // ---------- Mock stops ----------
 // Mock/demo data only — no rating, review count, or badge here on purpose.
 // Those must come from real reviews via scoreStop(), never be invented.
+//
+// These are NOT real places. Names, addresses and coordinates are fictional
+// demo values and do not match each other: an address here is not where its
+// coordinates point. Never treat them as navigation or location evidence —
+// Directions uses the coordinates, so a mock stop may open somewhere that
+// does not look like its address.
 
 export const MOCK_STOPS: StopData[] = [
   {
