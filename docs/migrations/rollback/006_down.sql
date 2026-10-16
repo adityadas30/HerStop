@@ -1,6 +1,8 @@
 -- DEVELOPMENT/STAGING ONLY. Deletes ALL source='openstreetmap' rows, including
 -- later ingestion or edits. Requires explicit acceptance of that data loss:
 -- set herstop.rollback_006_allow_osm_loss = 'on';
+-- set herstop.staging_only = 'on';
+-- BOTH attestations are required on EVERY invocation, even with no OSM rows.
 -- Set this in the SAME SQL Editor session after exporting and stopping clients.
 -- Even with the flag, dependent saves/reviews cause an abort (no silent cascade).
 -- Restores exactly the explicit six seed values in 001, NOT live TEST rename,
@@ -11,10 +13,13 @@ set local lock_timeout = '5s';
 lock table public.stops, public.saved_stops, public.reviews in access exclusive mode;
 do $$
 begin
+  if current_setting('herstop.rollback_006_allow_osm_loss', true) is distinct from 'on' then
+    raise exception '006 rollback requires explicit OSM data-loss flag';
+  end if;
+  if current_setting('herstop.staging_only', true) is distinct from 'on' then
+    raise exception '006 rollback requires staging-only attestation';
+  end if;
   if exists (select 1 from public.stops where source = 'openstreetmap') then
-    if current_setting('herstop.rollback_006_allow_osm_loss', true) is distinct from 'on' then
-      raise exception '006 rollback requires explicit OSM data-loss flag';
-    end if;
     if exists (select 1 from public.saved_stops s join public.stops t on t.id=s.stop_id where t.source='openstreetmap')
        or exists (select 1 from public.reviews r join public.stops t on t.id=r.stop_id where t.source='openstreetmap') then
       raise exception '006 rollback refuses dependent user data loss';

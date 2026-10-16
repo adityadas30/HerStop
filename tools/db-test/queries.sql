@@ -44,11 +44,32 @@ insert into saved_stops select * from jsonb_populate_recordset(null::saved_stops
 -- QUERY: rollback_flags
 select set_config('herstop.rollback_003_clients_ready','on',false),
  set_config('herstop.rollback_005_columns_unused','on',false),
- set_config('herstop.rollback_006_allow_osm_loss','on',false);
+ set_config('herstop.rollback_006_allow_osm_loss','on',false),
+ set_config('herstop.rollback_008_clients_ready','on',false),
+ set_config('herstop.rollback_009_clients_ready','on',false),
+ set_config('herstop.staging_only','on',false);
 -- QUERY: clear_flags
 select set_config('herstop.rollback_003_clients_ready','off',false),
  set_config('herstop.rollback_005_columns_unused','off',false),
- set_config('herstop.rollback_006_allow_osm_loss','off',false);
+ set_config('herstop.rollback_006_allow_osm_loss','off',false),
+ set_config('herstop.rollback_008_clients_ready','off',false),
+ set_config('herstop.rollback_009_clients_ready','off',false),
+ set_config('herstop.staging_only','off',false);
+-- QUERY: all_flags_but_staging
+select set_config('herstop.rollback_003_clients_ready','on',false),
+ set_config('herstop.rollback_005_columns_unused','on',false),
+ set_config('herstop.rollback_006_allow_osm_loss','on',false),
+ set_config('herstop.rollback_008_clients_ready','on',false),
+ set_config('herstop.rollback_009_clients_ready','on',false),
+ set_config('herstop.staging_only','off',false);
+-- QUERY: creator_flag
+select set_config('herstop.object_creator_role',current_user,false);
+-- QUERY: clear_creator_flag
+select set_config('herstop.object_creator_role','',false);
+-- QUERY: fixture_published_edits
+-- After 008 the fixture rows get edited_at=now() from the column default; as the
+-- owner (trigger does not fire for owner) make them "published, never edited".
+update reviews set edited_at=created_at;
 -- QUERY: guard_save
 insert into saved_stops(user_id,stop_id) values ('10000000-0000-0000-0000-000000000001','osm-node-7759210731');
 -- QUERY: guard_review
@@ -67,12 +88,23 @@ select count(*)::int n from stops where id='local-other-provider' and source='ot
 -- QUERY: other_provider_cleanup
 delete from stops where id='local-other-provider';
 -- QUERY: snapshot
+-- ACLs are compared as sorted aclitem sets: item order has no meaning.
 select kind, name, detail from (
- select 'table' kind, c.relname name, jsonb_build_object('rls',c.relrowsecurity,'force',c.relforcerowsecurity,'acl',c.relacl::text) detail
+ select 'table' kind, c.relname name, jsonb_build_object('rls',c.relrowsecurity,'force',c.relforcerowsecurity,
+  'acl',(select array_agg(x::text order by x::text) from unnest(c.relacl) x)) detail
  from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r'
  union all
+ select 'schema', n.nspname, jsonb_build_object('owner',pg_get_userbyid(n.nspowner),
+  'acl',(select array_agg(x::text order by x::text) from unnest(n.nspacl) x))
+ from pg_namespace n where n.nspname not like 'pg\_%' and n.nspname <> 'information_schema'
+ union all
+ select 'default_acl', pg_get_userbyid(d.defaclrole) || '/' || coalesce(n.nspname,'(global)') || '/' || d.defaclobjtype::text,
+  to_jsonb((select array_agg(x::text order by x::text) from unnest(d.defaclacl) x))
+ from pg_default_acl d left join pg_namespace n on n.oid=d.defaclnamespace
+ union all
  select 'column', c.relname || '.' || a.attname,
- jsonb_build_object('type',format_type(a.atttypid,a.atttypmod),'null',a.attnotnull,'default',pg_get_expr(d.adbin,d.adrelid))
+ jsonb_build_object('type',format_type(a.atttypid,a.atttypmod),'null',a.attnotnull,'default',pg_get_expr(d.adbin,d.adrelid),
+  'acl',(select array_agg(x::text order by x::text) from unnest(a.attacl) x))
  from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace
  left join pg_attrdef d on d.adrelid=a.attrelid and d.adnum=a.attnum
  where n.nspname='public' and c.relkind='r' and a.attnum>0 and not a.attisdropped
@@ -80,7 +112,8 @@ select kind, name, detail from (
  select 'policy', tablename || '.' || policyname, to_jsonb(p) - 'schemaname' from pg_policies p where schemaname='public'
  union all
  select 'function', p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')',
- jsonb_build_object('definition',pg_get_functiondef(p.oid),'acl',p.proacl::text,'owner',pg_get_userbyid(p.proowner))
+ jsonb_build_object('definition',pg_get_functiondef(p.oid),'owner',pg_get_userbyid(p.proowner),
+  'acl',(select array_agg(x::text order by x::text) from unnest(p.proacl) x))
  from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public'
  union all
  select 'constraint', c.relname || '.' || co.conname, to_jsonb(pg_get_constraintdef(co.oid))

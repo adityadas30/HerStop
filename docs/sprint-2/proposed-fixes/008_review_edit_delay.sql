@@ -1,9 +1,32 @@
--- PROPOSAL ONLY. Not part of the approved 001-007 staging sequence.
+-- FINAL CANDIDATE, UNAPPLIED. Fresh disposable staging only; not production.
 -- B1: edits hide the existing public review until the next daily publication
 -- batch. A pending-edit copy would preserve the old public text but needs a
 -- larger product/schema design. Re-review this simpler visibility tradeoff.
+-- KNOWN RISK (accepted for staging only, see staging-runbook DECISION BOX): an
+-- edit removes the old published version for other viewers IMMEDIATELY, and the
+-- edited version reappears only after the next daily batch: 24-48h later,
+-- depending on the time of day of the edit (session TimeZone sets the day).
+-- That disappearance is itself a timing signal. "Visible 24 hours after posting"
+-- copy is wrong for edits. Only a real change counts as an edit: a no-op
+-- upsert (same values) keeps edited_at.
 begin;
 set local lock_timeout = '5s';
+-- Owner-only rollback metadata; no user content is copied here.
+create schema if not exists herstop_rollback;
+revoke all on schema herstop_rollback from public, anon, authenticated;
+create table if not exists herstop_rollback.state (
+  version text primary key, creator name not null, payload jsonb not null
+);
+revoke all on herstop_rollback.state from public, anon, authenticated;
+insert into herstop_rollback.state(version,creator,payload)
+select '008',current_user,jsonb_agg(pg_get_functiondef(p.oid) order by p.proname)
+from pg_proc p where p.oid in (
+ 'public.reviews_enforce_invariants()'::regprocedure,
+ 'public.get_stop_reviews(text)'::regprocedure,
+ 'public.get_stop_review_stats(text[])'::regprocedure,
+ 'public.report_review(uuid,text,text)'::regprocedure,
+ 'public.hide_review(uuid)'::regprocedure
+);
 alter table public.reviews add column edited_at timestamptz;
 update public.reviews set edited_at=created_at;
 alter table public.reviews alter column edited_at set default now();

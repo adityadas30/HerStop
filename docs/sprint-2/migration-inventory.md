@@ -1,6 +1,6 @@
 # Migration inventory — local audit, 2026-10-15
 
-Scope: base `5062c31`, branch `paseo/db-staging-prep`. No remote inspection by this engineer. Live facts below are the Lead's supplied 2026-10-15 inspection, not historical migration comments. SQL files 001–007 are unchanged. “001” means `docs/schema.sql`.
+Scope: base `5062c31`, branch `paseo/db-staging-prep`; 008/009 rows added 2026-10-16 after the security re-review. No remote inspection by this engineer. Live facts below are the Lead's supplied 2026-10-15 inspection, not historical migration comments. SQL files 001–007 are unchanged. “001” means `docs/schema.sql`.
 
 ## Actual starting state
 
@@ -16,6 +16,8 @@ Scope: base `5062c31`, branch `paseo/db-staging-prep`. No remote inspection by t
 | 004 — SKIP | Historical transaction deletes six legacy IDs without a source filter, cascading to saves/reviews, then inserts/upserts 18 curated real stops using ID conflict handling. No new schema/policies/grants/functions. On an isolated 001/002 starting state it would replace six with 18 and remove the two saves. **Never include in the staging sequence.** |
 | 005 | Transaction/5s timeout. Adds source text NOT NULL DEFAULT manual; source_id text backfilled from id then NOT NULL with **no default**; nullable stop_type; updated_at timestamptz NOT NULL DEFAULT now(); nullable safety_context jsonb. Creates unique **index**, not named table constraint, `stops_source_source_id_key(source,source_id)`. Adds invoker trigger function `set_stops_updated_at()` and BEFORE UPDATE row trigger `stops_set_updated_at` forcing now(). No RLS/grant changes; inherited function EXECUTE defaults remain. Does not delete rows. Evidence: `005_stops_provider_fields.sql:21–62`. |
 | 006 | Transaction/5s timeout. Deletes only IDs `1`–`6` with source manual; inserts 44 OpenStreetMap rows. INSERT explicitly sets id/source/source_id/name/address/coordinates/categories/stop_type/tags=[]/rating=0/review_count=0; badge/image fields/timestamps get defaults. Conflict target `(source,source_id)` updates **only** name,address,latitude,longitude,categories,stop_type; trigger refreshes updated_at. Does not reset existing rating/tags/review_count or change ID. No schema/policy/function/grant additions. Not a sync deletion of all old OSM rows: extra pre-existing OSM rows remain, so 44 assumes the documented starting state. Evidence: `006_ingest_real_stops.sql:21–82`. |
+| 008 (final candidate, `docs/sprint-2/proposed-fixes/`) | Transaction/5s timeout. Creates owner-only schema `herstop_rollback` + table `state` and stores the five pre-008 function definitions (no user content). Adds `reviews.edited_at timestamptz NOT NULL DEFAULT now()`, backfilled to created_at. Replaces `reviews_enforce_invariants()`: client inserts force edited_at=now(); client updates pin edited_at and set it to now() **only if some other column actually changed**, so a no-op upsert is not an edit. Guarded text substitutions make get_stop_reviews/get_stop_review_stats/report_review/hide_review use `greatest(created_at, edited_at)` for the daily cutoff; they abort on source drift. Not re-runnable (ADD COLUMN). |
+| 009 (final candidate) | Transaction/5s timeout. Requires `herstop.object_creator_role` = current_user, a single owner for all public tables/functions, and 008 metadata. Stores pre-009 policies/functions/grants/default ACLs (for PUBLIC/anon/authenticated) in `herstop_rollback.state`. Adds `is_caller_banned()` (definer, empty search_path). Recreates the reviews INSERT/UPDATE/DELETE policies `TO authenticated`, with insert/update checking `not public.is_caller_banned()`. Rewrites report_review/hide_review with empty search_path and fully qualified names, refusing banned callers with 42501. Revokes TRUNCATE/REFERENCES/TRIGGER on all public tables, everything on the three moderation tables, and CREATE on schema public. Revokes default TRUNCATE/REFERENCES/TRIGGER (tables) and EXECUTE (functions), global and in-schema, **for current_user's default ACLs only**. Revokes EXECUTE on all public functions, then grants an explicit allowlist. Ends with an effective-privilege check that aborts on any leftover client grant. |
 | 007 | Creates/replaces `public.delete_my_account()` void SECURITY DEFINER, empty search_path, uses qualified auth.uid()/auth.users, no arguments. Raises 28000 without a caller; removes only caller's auth.users row, with cascading effects below. Revokes EXECUTE from PUBLIC/anon, grants authenticated. No immediate data change until called. No enclosing transaction/lock timeout in the original file: founder should wrap the **whole file** in a transaction. Evidence: `007_delete_my_account.sql:71–93`. |
 
 All evidence paths without a directory prefix above are under `docs/migrations/`.
@@ -44,7 +46,9 @@ All evidence paths without a directory prefix above are under `docs/migrations/`
 | report_review(uuid,text,text default null) → void | SECURITY DEFINER, public,pg_temp; caller required; validates other-author visibility; inserts caller-scoped report and note snapshot, conflict no-op. Own author bypasses visibility check; **caller ban not checked**. PUBLIC/anon revoked; authenticated granted. |
 | hide_review(uuid) → void | SECURITY DEFINER, public,pg_temp; caller required; own review is no-op; otherwise validates visibility, inserts caller-scoped preference, conflict no-op. **Caller ban not checked**. PUBLIC/anon revoked; authenticated granted. |
 
-Table DML/TRUNCATE grants are **not established by 001–007**. Inspect actual platform ACLs and default ACLs; RLS does not constrain TRUNCATE. The harness supplies explicit simulated grants and demonstrates this conditional failure. Later PUBLIC grants can confer privileges despite an earlier role-specific REVOKE; SQL grants are additive, not explicit deny rules.
+After 009: `is_banned`, `review_publish_delay` and both trigger functions are owner-only. Triggers still fire, since EXECUTE is checked only when the trigger is created. Execute allowlist: anon → get_stop_reviews, get_stop_review_stats. authenticated → those plus is_caller_banned, report_review, hide_review, delete_my_account. 008 changes the read cutoff for all four review functions to `greatest(created_at, edited_at)`, so an edited review leaves other viewers' results immediately and returns 24–48h later.
+
+Table DML/TRUNCATE grants are **not established by 001–007**. Inventory them right after 002 on a fresh project (runbook §4a, both outcomes documented there). Inspect actual platform ACLs and default ACLs; RLS does not constrain TRUNCATE. The harness supplies explicit simulated grants and demonstrates this conditional failure. Later PUBLIC grants can confer privileges despite an earlier role-specific REVOKE; SQL grants are additive, not explicit deny rules.
 
 ## Dependency graph and row counts
 
@@ -55,11 +59,12 @@ auth.users + auth.uid()/roles
  │           └───────────────┼────> 007 (technical dependency: 002)
  └──────> 005 ───────────────┴────> 006
 004: excluded, superseded
-Operational fresh order: 001 → 002 → 003 → 005 → 006 → 007
-Existing audited 001/002 shape: 003 → 005 → 006 → 007
+Fresh staging order: schema.sql (001) → 002 → [grant pre-check] → 003 → 005 → 006 → 007 → 008 → 009
+Existing audited 001/002 shape: 003 → 005 → 006 → 007 → 008 → 009
+Rollback order: 009 → 008 → 007 → 006 → 005 → 003
 ```
 
-005 technically only needs stops/001; 006 operationally requires 002+003+005. 007 can technically work without 003, but the verified sequence includes it.
+005 technically only needs stops/001; 006 operationally requires 002+003+005. 007 can technically work without 003, but the verified sequence includes it. 008 needs 003's functions. 009 needs 008's metadata and 007's function, because it grants delete_my_account explicitly. Each down refuses if a later layer is still installed (003_down checks for 008/009; 008_down checks for 009). 008/009 are for **fresh disposable staging only**, not production.
 
 | Step from supplied live-shaped state | stops | saved_stops | reviews | profiles | auth.users | moderation tables |
 |---|---:|---:|---:|---:|---:|---|
@@ -69,6 +74,7 @@ Existing audited 001/002 shape: 003 → 005 → 006 → 007
 | 005 | 6 | 2 | 0 | 0 | 1 | 0 each |
 | 006 | 44 | **0** | 0 | 0 | 1 | 0 each |
 | 007 installed, not called | 44 | 0 | 0 | 0 | 1 | 0 each |
+| 008, 009 | 44 | 0 | 0 | 0 | 1 | 0 each (schema/grant changes only) |
 
 Fresh staging: 001 creates six fictional stops; 002 creates three empty tables. Without test users/imported data, auth.users and saved_stops stay 0 throughout, stops become 44 at 006. Do not import production identity data merely to get the table above: the harness uses a synthetic user and two synthetic saves to reproduce its shape.
 

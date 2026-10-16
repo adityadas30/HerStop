@@ -2,7 +2,7 @@
 
 Prepared locally on 2026-10-15 at base `5062c31`. **No remote action has been performed.** Use a separate project named **herstop-staging**. Production ref `xnkjqcygzjlspeagcoal` is prohibited for this procedure. Check the dashboard project name AND URL/ref before every SQL/import/auth action. Never treat a place as guaranteed safe; the app provides decision context.
 
-The independent review verdict is **APPROVE WITH CHANGES for staging; fix before production**. B1 (published-review edits bypass the reporting window) blocks production. Other privacy/moderation risks and platform checks are in [risk-register.md](risk-register.md). A passing local test does not approve production. Proposed 008/009 are separate files, not part of the 001–007 apply plan.
+The independent security re-review verdict is **APPROVE WITH FIXES: 008/009 are safe for a fresh disposable staging project, NOT production**. The 008/009 final candidates (`docs/sprint-2/proposed-fixes/`) are now part of the fresh-staging apply order (§4b). B1 is mitigated by 008 with a KNOWN RISK that needs a founder decision before production (DECISION BOX in §4b). Other privacy/moderation risks and platform checks are in [risk-register.md](risk-register.md). A passing local test does not approve production.
 
 ## 1. Local evidence and prerequisites
 
@@ -10,7 +10,7 @@ The independent review verdict is **APPROVE WITH CHANGES for staging; fix before
 PATH=/Users/adityadas/.nvm/versions/node/v24.14.1/bin:$PATH node tools/db-test/run.mjs
 ```
 
-Local result: 37/37 checks passed. Known-risk tests PASS when they reproduce the documented vulnerability. Exact migrations run in in-process PGlite, with synthetic identities, simulated grants, catalog rollback comparisons and CSV backup round trip. No extension substitution was needed. See [tooling README](../../tools/db-test/README.md) for limits. No `.env` file was read; only PGlite installation used network. Mobile package/lockfiles and original migrations are unchanged.
+Local result (2026-10-16): **77/77 checks passed**. The run covers the baseline 001–007 suite; 008/009 applied on top; every non-baseline isolation case re-run with 008/009 installed; and the 008/009 rollback guards plus a full 009 → 008 → 007 → 006 → 005 → 003 catalog-restoring chain. The suite was mutation-checked: 9 deliberate defects (policy without `to authenticated`, no-op upsert counted as an edit, missing TRUNCATE revoke, missing default-ACL revoke, missing caller-ban check, 008 visibility change removed, 003_down guard removed, 006_down staging attestation removed, 009_down ACL replay removed) were each caught by the intended test. Known-risk tests PASS when they reproduce the documented vulnerability. Exact migrations run in in-process PGlite, with synthetic identities, simulated grants, catalog rollback comparisons and CSV backup round trip. No extension substitution was needed. See [tooling README](../../tools/db-test/README.md) for limits. No `.env` file was read; only PGlite installation used network. Mobile package/lockfiles and original migrations are unchanged.
 
 Founder prerequisites: separate project, dashboard access, two **new disposable** accounts with no existing app data, a secure local backup folder, and a quiet maintenance window. Pause app clients, test automation and ingestion during apply/rollback/restore. Do not copy real users' data into staging just to match production counts. Enable Email + Password for the test accounts and disable confirm-email **only in staging**, or explicitly pre-confirm those disposable users. These settings are for password tests; separately configure OTP templates with `{{ .Token }}` in both signup and magic-link templates. Password-test settings do not prove OTP works. Record the security advisor's leaked-password protection setting; the supplied live report says it is disabled. Do not assume staging inherits anything.
 
@@ -95,7 +95,7 @@ Record successful exit, archive size/checksum and object list (including auth sc
 
 ## 4. Apply exact migration files, one checkpoint at a time
 
-**Fresh staging:** `docs/schema.sql` → `002_auth_tables.sql` → `003_reviews_privacy_and_moderation.sql` → `005_stops_provider_fields.sql` → `006_ingest_real_stops.sql` → `007_delete_my_account.sql`. **Skip 004.** It is marked DO NOT RUN, superseded by 006, is only 18 curated rows, and fails after 005 because source_id is required. Do not run the ingestion generator: the reviewed SQL already contains 44 rows and generation would make external requests.
+**Fresh staging apply order:** `docs/schema.sql` → `002_auth_tables.sql` → **grant pre-check (§4a)** → `003_reviews_privacy_and_moderation.sql` → `005_stops_provider_fields.sql` → `006_ingest_real_stops.sql` → `007_delete_my_account.sql` → `proposed-fixes/008_review_edit_delay.sql` → `proposed-fixes/009_caller_moderation_and_grants.sql` (§4b). **Skip 004.** It is marked DO NOT RUN, superseded by 006, is only 18 curated rows, and fails after 005 because source_id is required. Do not run the ingestion generator: the reviewed SQL already contains 44 rows and generation would make external requests.
 
 001 is **not safely re-runnable**: unguarded CREATE POLICY and fictional seed INSERTs. 002 is not safe to replay after 003 because it restores public author IDs. For an audited, already-applied 001/002 staging schema, start at 003. Empty migration history is not proof of an empty schema.
 
@@ -126,6 +126,72 @@ select count(*) from public.reviews;
 
 After 006 expect openstreetmap=44 and all other counts zero on this pristine dataset. Source data is a historical OSM snapshot, not verification of current facilities or conditions; attribution must appear in the app.
 
+### 4a. Fresh-project pre-checks — run immediately after 002, before 003
+
+Supabase platform grants are **UNVERIFIED** from here; PGlite cannot tell us what a new project grants. Inventory them while the schema is still small, and save the output in the private manifest:
+
+```sql
+select current_user, current_setting('TimeZone') as session_tz;
+select grantee,table_name,privilege_type from information_schema.role_table_grants
+where table_schema='public' and grantee in ('PUBLIC','anon','authenticated')
+order by table_name,grantee,privilege_type;
+select pg_get_userbyid(d.defaclrole) as creator_role, coalesce(n.nspname,'(all schemas)') as scope,
+       d.defaclobjtype, d.defaclacl
+from pg_default_acl d left join pg_namespace n on n.oid=d.defaclnamespace order by 1,2,3;
+select c.relname, pg_get_userbyid(c.relowner) as owner from pg_class c
+where c.relnamespace='public'::regnamespace and c.relkind='r' order by 1;
+select has_schema_privilege('anon','public','create') as anon_create,
+       has_schema_privilege('authenticated','public','create') as auth_create;
+```
+
+Record `current_user` — that is the **object-creating role** for every file you paste in the SQL Editor (normally `postgres`, but write down what you actually see). 009 asks you to attest it.
+
+- **Outcome A — no client TRUNCATE/REFERENCES/TRIGGER grants and no broad default ACLs** for `anon`/`authenticated`: unusual for Supabase, but fine. 009's revokes are then no-ops, and its final effective-privilege check still has to pass.
+- **Outcome B — broad grants exist** (the expected Supabase shape: `anon`/`authenticated` hold ALL incl. TRUNCATE on the new tables, and `pg_default_acl` rows for `postgres` and/or `supabase_admin` grant tables/functions to them): this is the G1 exposure. Treat staging as **disposable-test only until 009 is applied and its in-file check passes**. Note which `creator_role` owns each default-ACL row. 009 run as `postgres` can only fix `postgres`'s own default ACLs; rows owned by another role (e.g. `supabase_admin`) are left untouched (see the 009 header comment). If all public tables are owned by `current_user`, that's fine for existing objects. Objects created later by the other role will still pick up broad grants, so re-run this inventory after any platform-created object appears.
+- Either outcome: if any public table is owned by a role other than `current_user`, or `anon_create`/`auth_create` is true, **stop** and review before 003.
+
+### 4b. Apply 008 and 009 — fresh disposable staging only, never production
+
+Both files are the reviewed final candidates, unapplied anywhere. Each has its own BEGIN/COMMIT and a 5s lock timeout. 008 stores rollback metadata (function definitions only, no user content) in an owner-only `herstop_rollback` schema. Paste 009 in the **same execution** as its attestation, using the role recorded in §4a:
+
+```sql
+set herstop.object_creator_role = '<current_user from 4a>';
+-- paste the complete 009_caller_moderation_and_grants.sql here
+```
+
+009 refuses if the attestation doesn't match `current_user`, if any public table/function has another owner, or if 008's metadata is missing. It ends with an **effective-privilege check**. If any client can still TRUNCATE/REFERENCES/TRIGGER a public table, or EXECUTE a function outside the allowlist, it aborts the whole transaction. Allowlist: anon → `get_stop_reviews`, `get_stop_review_stats`. authenticated → those two plus `is_caller_banned`, `report_review`, `hide_review`, `delete_my_account`. An abort means a grant came from another role: ROLLBACK, inventory, stop.
+
+After 008 **and again after 009**:
+
+1. **PostgREST schema cache reload.** `edited_at` is a new column, `is_caller_banned` a new RPC, and grants changed. Run `notify pgrst, 'reload schema';` and confirm (e.g. via the two-user script's mode probe) that the API sees `edited_at`. A stale cache can make the API disagree with SQL.
+2. **Realtime publication check.** Realtime would push row changes to subscribers and must not become a side channel around the publication delay:
+   ```sql
+   select pubname, schemaname, tablename from pg_publication_tables
+   where schemaname='public' and tablename in ('reviews','review_reports','hidden_reviews','banned_users');
+   ```
+   Expect **zero rows**. If `reviews` (or any moderation table) is published, stop. Do not enable Realtime for these tables without a separate review.
+3. **Session TimeZone for the daily boundary.** `date_trunc('day', …)` uses the TimeZone of the session calling the RPC, not UTC by definition. API calls run as the PostgREST connection, so check the database/role defaults too:
+   ```sql
+   select current_setting('TimeZone');
+   select coalesce(r.rolname,'(all roles)') as role, s.setconfig from pg_db_role_setting s
+   left join pg_roles r on r.oid=s.setrole where s.setdatabase in (0,(select oid from pg_database where datname=current_database()));
+   ```
+   Record the effective zone (expect UTC). If a role-level TimeZone differs from UTC, the daily batch boundary moves. Changing database/role settings is a founder decision and is not part of these files.
+4. Re-run the §4a inventory plus `select has_table_privilege('anon','public.review_reports','truncate');` for every public table. Expect **false everywhere**.
+
+> **DECISION BOX: edit timing (founder decision required before production)**
+>
+> With 008, editing a published review hides it from everyone else **immediately** (the old text and its rating contribution vanish). The edited version reappears only at the next daily batch, **24–48 hours** after the edit, depending on the time of day of the edit in the session TimeZone. That disappearance is itself an observable timing signal. A no-op save (identical values) is not an edit and changes nothing.
+>
+> | Option | What it means | When |
+> |---|---|---|
+> | **A. Accept for staging** (recommended now) | Ship 008 as is to disposable staging. The KNOWN RISK test (`008 KNOWN RISK: an edit makes the published review vanish…`) must keep passing, so the behaviour is documented and detected, not accidental. | Staging only. Not a production approval. |
+> | **B. Published-copy design before production** | Keep the last published version visible while the edit waits out the delay (a pending-edit copy, swapped in by the daily batch). Needs a new schema/product spec, its own migration and security review. | Required before production, unless the founder explicitly accepts option A's behaviour for production in writing. |
+>
+> Decision: ________  Date: ________  By: ________
+
+**Copy correction (app, separate task):** `apps/mobile/components/ReviewCard.tsx:97` says "Visible to other travelers 24 hours after posting." That is wrong for edits: after an edit, the old version disappears immediately and the new one appears 24–48h later. It's also approximate for new posts (24–48h with the daily batch). Route a copy change through mobile-builder; it's not part of this DB change.
+
 ## 5. Verify 007 with SQL AND an actual caller
 
 First `select to_regprocedure('public.delete_my_account()');` must be non-null. Only then run:
@@ -139,6 +205,8 @@ from pg_proc p where p.oid='public.delete_my_account()'::regprocedure;
 select has_table_privilege('anon','public.banned_users','TRUNCATE') as anon_ban_truncate,
        has_table_privilege('authenticated','public.banned_users','TRUNCATE') as auth_ban_truncate;
 ```
+
+Before 009 these may be true (Outcome B in §4a). After 009 they must be false for every public table; 009 aborts otherwise.
 
 Expected execute true/false, prosecdef true, proconfig empty search_path; record proowner and **owner_can_delete_auth_users=true**. Repeat TRUNCATE checks for every public app table, especially review_reports/hidden_reviews. Any client TRUNCATE grant is a staging exposure: restrict access to disposable testing and review proposed 009 before opening staging to other users. Actual platform grants are **UNVERIFIED**, not supplied by PGlite. Permission checks alone do not prove the call can satisfy all managed auth/storage constraints; the throwaway account test below is mandatory. If 007 lacks owner DELETE privilege or a platform dependency blocks it, it should fail atomically; record the actual error privately, stop account-deletion signoff, and treat Apple's in-app deletion requirement as unmet.
 
@@ -157,24 +225,38 @@ HERSTOP_TEST_USER_A_EMAIL=<disposable A>
 HERSTOP_TEST_USER_A_PASSWORD=<private>
 HERSTOP_TEST_USER_B_EMAIL=<disposable B>
 HERSTOP_TEST_USER_B_PASSWORD=<private>
+HERSTOP_RLS_MODE=with-008-009   # or baseline-003 if staging stops at 007
 ```
+
+`HERSTOP_RLS_MODE` is required and has no default. `baseline-003` asserts the old KNOWN RISKS are reproduced: immediate public edits, the arbitrary-UUID ban oracle, banned callers reporting/hiding. `with-008-009` asserts the fixes: edits set `edited_at` (not forgeable, no-op is not an edit), an edited review leaves other viewers' results until aged, `is_banned` is denied to clients, banned callers get 42501. The script stops if the mode does not match whether the deployed `reviews` rows have `edited_at`.
 
 ```sh
 PATH=/Users/adityadas/.nvm/versions/node/v24.14.1/bin:$PATH node apps/mobile/scripts/rls-two-user-check.mjs
 ```
 
-It checks A/B/anon isolation for profiles/saves/reviews, strict insert-as denials, own CRUD and invariants, public projection/delay, report/hide permissions, published edit exposure, hidden/banned handling, the arbitrary-UUID ban oracle, actual account deletion and B's surviving data. Risk assertions intentionally match unchanged 003; after proposed fixes are adopted, revise expected outcomes. This is interactive because public API clients cannot age reviews, set bans or inspect auth.users. At each checkpoint, use **only staging SQL Editor**; inspect the two fixture rows and their matching disposable account emails before mutating. If there are extra marker rows, stop. The marker is `HerStop staging RLS fixture` and A/B suffixes. Do not log these IDs publicly.
+It checks A/B/anon isolation for profiles/saves/reviews, strict insert-as denials, own CRUD and invariants, public projection/delay, report/hide permissions, published edit behaviour, hidden/banned handling, the ban oracle, actual account deletion and B's surviving data. Expected outcomes follow `HERSTOP_RLS_MODE`. This is interactive because public API clients cannot age reviews, set bans or inspect auth.users. At each checkpoint, use **only staging SQL Editor**; inspect the two fixture rows and their matching disposable account emails before mutating. If there are extra marker rows, stop. The marker is `HerStop staging RLS fixture` and A/B suffixes. Do not log these IDs publicly.
 
-**AGE checkpoint:** verify exactly the two test reviews; age them to exercise existing public reviews without waiting up to 48 hours:
+**AGE checkpoint:** verify exactly the two test reviews, then age them so they count as existing public reviews without waiting up to 48 hours. With 008 installed, **edited_at must be aged too**. Visibility uses `greatest(created_at, edited_at)`, so ageing only created_at leaves the reviews hidden and the script fails. Owner (SQL Editor) updates do not touch edited_at; only client edits do.
 
 ```sql
 select id,user_id,note from public.reviews where note like 'HerStop staging RLS fixture %';
--- Only after verifying both user IDs belong to the disposable accounts:
+-- Only after verifying exactly two rows whose user IDs belong to the disposable accounts.
+-- HERSTOP_RLS_MODE=baseline-003:
 update public.reviews set created_at=now()-interval '3 days'
-where note in ('HerStop staging RLS fixture A','HerStop staging RLS fixture B');
+where note like 'HerStop staging RLS fixture %';
+-- HERSTOP_RLS_MODE=with-008-009 (instead of the statement above):
+update public.reviews set created_at=now()-interval '3 days', edited_at=now()-interval '3 days'
+where note like 'HerStop staging RLS fixture %';
 ```
 
-**HIDE checkpoint:** after API report/hide, inspect one B→A report with review_note_snapshot=`HerStop staging RLS fixture A edited-public` and one B→A hide. Also verify one A→B report/hide (B snapshot is `HerStop staging RLS fixture B`) so later deletion checks cover data **filed by A**, not just data about A. Then globally hide A:
+**AGE EDIT checkpoint (with-008-009 only):** A has just edited its published review. The script has confirmed it vanished for anon and B (KNOWN RISK) and that A still sees it. Age only the edit to simulate the next daily batch:
+
+```sql
+select id,user_id,note,created_at,edited_at from public.reviews where note='HerStop staging RLS fixture A edited-public';
+update public.reviews set edited_at=now()-interval '3 days' where note='HerStop staging RLS fixture A edited-public';
+```
+
+**HIDE checkpoint:** after API report/hide, inspect one B→A report and one B→A hide. The report is filed **before** A's edit, so the snapshot is `HerStop staging RLS fixture A` in baseline-003 mode and `HerStop staging RLS fixture A note edit` in with-008-009 mode. The queries below find A's row by its current note, `… A edited-public`. Also verify one A→B report/hide (B snapshot is `HerStop staging RLS fixture B`) so later deletion checks cover data **filed by A**, not just data about A. Then globally hide A:
 
 ```sql
 select count(*) from public.review_reports rr join public.reviews r on r.id=rr.review_id
@@ -213,7 +295,7 @@ select count(*) from public.hidden_reviews where user_id='<A-UUID>'::uuid or rev
 
 After typing verified, cleanup deletes B too. Repeat these queries: both users and all their dependent rows should now be absent, stops still 44. If cleanup reports failure or the process is interrupted, inspect both accounts and all fixture rows immediately; remove only those disposable fixtures through the dashboard after recording the failure. A failed 007 can leave profiles/moderated reviews/evidence that ordinary RLS deletes cannot remove. Never mark cleanup complete without the post-count check. `MANUAL` output means founder attestation, not automated API proof.
 
-The exact daily cutoff and destructive stop cascade are automated locally. To independently repeat timing on staging, use a disposable review at `date_trunc('day',now()-interval '24 hours')`: anon stats must exclude it; set it one microsecond earlier: include it. Restore the timestamp afterward. Set the database/session timezone UTC and record it; SQL uses session timezone, not a hard-coded UTC conversion. A review in this 24-hour bucket is revealed by daily publication, so month-only display does **not** imply month-only timing privacy. Do not delete one of the 44 staging stops to test cascades; the harness already proves the actual FK graph. Rehearse a separate disposable stop only if a founder needs hosted FK evidence, then compare saves/reviews/reports/hides before/after.
+The exact daily cutoff and destructive stop cascade are automated locally. To independently repeat timing on staging, use a disposable review at `date_trunc('day',now()-interval '24 hours')`: anon stats must exclude it; set it one microsecond earlier: include it. Restore the timestamp afterward. Set the database/session timezone UTC and record it (§4b step 3); SQL uses session timezone, not a hard-coded UTC conversion. With 008 the same cutoff applies to `greatest(created_at, edited_at)`, so to repeat it for an edit, move edited_at instead. A review in this 24-hour bucket is revealed by daily publication, so month-only display does **not** imply month-only timing privacy. Do not delete one of the 44 staging stops to test cascades; the harness already proves the actual FK graph. Rehearse a separate disposable stop only if a founder needs hosted FK evidence, then compare saves/reviews/reports/hides before/after.
 
 ## 7. History consistency — choose explicitly, never blindly push/repair
 
@@ -228,23 +310,26 @@ The live history is empty because SQL Editor was used, not because migrations ar
 
 ## 8. Rollback and restore
 
-Stop writers; make a second backup of the current state so post-migration user data is not silently lost. Inspect guards before doing anything. Rollback order is **007 → 006 → 005 → 003**. No 001/002 rollback is supplied; never remove auth/user tables to reset staging casually.
+Stop writers; make a second backup of the current state so post-migration user data is not silently lost. Inspect guards before doing anything. Rollback order is **009 → 008 → 007 → 006 → 005 → 003**. Skip 009/008 only if they were never applied. Both are no-ops when absent. No 001/002 rollback is supplied; never remove auth/user tables to reset staging casually. For a staging project that already holds test users/reviews, **creating a new fresh staging project is usually better than rolling back**: 008/009 downs refuse populated tables by design.
 
 | Down file | Stop condition / loss |
 |---|---|
-| 007_down | Removes endpoint only; deploy/disable dependent client first. Does not restore deleted users/data. If 008/009 or other later changes exist, do not use this baseline rollback plan without revising dependencies. |
-| 006_down | Deletes **all** source=openstreetmap rows, including later ingestion/edits; default is refusal until explicit flag. Refuses any saves/reviews referencing those rows even with flag. Refuses existing changed/reserved legacy IDs. Reconstructs explicit 001 values, not TEST name/timestamps/lost saves. Other sources are retained. Extra non-OSM rows require re-inventory before 005_down. |
+| 009_down | STAGING ONLY, security **downgrade**. Restores pre-009 review write policies and moderation functions, and replays the captured pre-009 table/function/schema grants and default ACLs for PUBLIC/anon/authenticated. That **includes any unsafe pre-009 grants** such as client TRUNCATE. Requires `herstop.staging_only` and `herstop.rollback_009_clients_ready`, matching 008/009 metadata written by the same role, and **empty** reviews/profiles/saved_stops/banned_users/hidden_reviews/review_reports. Never empty them to pass. Idempotent: does nothing when 009 is absent. |
+| 008_down | STAGING ONLY. Refuses while 009 is installed. Requires `herstop.staging_only` and `herstop.rollback_008_clients_ready`, and **zero reviews** (edit history would be lost). Restores the five pre-008 function definitions, drops edited_at and the `herstop_rollback` schema (no CASCADE). Idempotent. |
+| 007_down | Removes endpoint only; deploy/disable dependent client first. Does not restore deleted users/data. Run only after 009_down (009 grants this function). |
+| 006_down | Deletes **all** source=openstreetmap rows, including later ingestion/edits. Requires **both** `herstop.rollback_006_allow_osm_loss` **and** `herstop.staging_only` on **every** run, even when no OSM rows remain. Refuses any saves/reviews referencing those rows even with flags. Refuses existing changed/reserved legacy IDs. Reconstructs explicit 001 values, not TEST name/timestamps/lost saves. Other sources are retained. Extra non-OSM rows require re-inventory before 005_down. |
 | 005_down | Refuses until operator attests **no code path needs columns**. Stop ingestion (`ingest-osm-stops.mjs` uses them), roll back/disable dependent app/jobs. PostgreSQL cannot inspect deployed code. Also refuses non-default provider data, stop_type/safety_context. Loses updated_at history and provider fields; no CASCADE drop. |
-| 003_down | **Export bans/reasons, reports/snapshots and hides first**, plus reviews. Requires stopped-client attestation and refuses any reviews or moderation rows. Restores 002 public author-ID reads and weaker moderation; never expose that state to real users. Do not delete evidence just to satisfy a guard. |
+| 003_down | **Export bans/reasons, reports/snapshots and hides first**, plus reviews. Refuses while 008 or 009 is installed (`public.is_caller_banned()` or `reviews.edited_at` exists). Requires stopped-client attestation and refuses any reviews or moderation rows. Restores 002 public author-ID reads and weaker moderation; never expose that state to real users. Do not delete evidence just to satisfy a guard. |
 
 Each file has BEGIN/COMMIT, 5s lock timeout, locks where data inspection precedes deletion, and idempotent object drops where possible. Apply flags in the **same SQL Editor execution/session** immediately before the relevant complete file, only after the checks are true:
 
 ```sql
 set herstop.rollback_006_allow_osm_loss='on';
--- paste complete 006_down.sql here; never set this flag without exports
+set herstop.staging_only='on';
+-- paste complete 006_down.sql here; never set these flags without exports
 ```
 
-Equivalent attestation settings: `herstop.rollback_005_columns_unused='on'` and `herstop.rollback_003_clients_ready='on'`. Do not enable all flags reflexively. If a guard fails, ROLLBACK and stop. A populated staging database may need restoration into a new isolated project instead of down-migrations. Never discard data to make a test green.
+Equivalent attestation settings: `herstop.rollback_009_clients_ready='on'` / `herstop.rollback_008_clients_ready='on'` (each with `herstop.staging_only='on'`), `herstop.rollback_005_columns_unused='on'` and `herstop.rollback_003_clients_ready='on'`. Do not enable all flags reflexively. If a guard fails, ROLLBACK and stop. A populated staging database may need restoration into a new isolated project instead of down-migrations. Never discard data to make a test green.
 
 **CSV restoration of the actual six stops and two saves** (same project, original auth users still present):
 
@@ -308,9 +393,9 @@ Run that entire merge/validation transaction in one execution; assertions abort 
 | 3. Session restore | Relaunch app signed in, refresh works, sign-out clears session/user UI and private state. |
 | 4. Persisted saves | Save, relaunch, observe same account's save; second account cannot see it. |
 | 5. Save failure rollback | Simulate offline/request rejection during optimistic save; UI rolls back, error is understandable, no ghost save after reconnect. |
-| 6. Write/edit/delete review | Own form persists; duplicate per stop prevented; ordinary own deletion works, moderated deletion blocked. Record B1 reproduction now and require proposed fix/retest before production. |
-| 7. Report/hide | Visible review reports idempotently with snapshot; personal hide only affects caller; global hide/bans respected; record banned-caller gap until fixed. |
+| 6. Write/edit/delete review | Own form persists; duplicate per stop prevented; ordinary own deletion works, moderated deletion blocked. With 008: an edit leaves other viewers' results until the next daily batch (24–48h). Record the DECISION BOX outcome. |
+| 7. Report/hide | Visible review reports idempotently with snapshot; personal hide only affects caller; global hide/bans respected; with 009 banned callers get 42501 (baseline-003 mode records the gap instead). |
 | 8. Delete account | SQL owner/grant checks plus actual throwaway RPC; auth.users/profile/saves/reviews/reports/hides/ban checks, B retained, local sign-out. Inspect storage ownership and platform auth dependencies. Failure blocks account-deletion signoff. |
 | 9. Cross-user isolation | New two-user script and local harness results; direct base-table UUIDs hidden from other users/anon, own operations work, public RPC projection contains no author UUID. |
 
-Record PASS/FAIL/UNVERIFIED with date, target ref, app build and tester. None of these nine live requirements has been verified by this local-only task. Stop before production until B1 and agreed security changes are reviewed, platform grants/007 deletion are proven, and this checklist is complete.
+Record PASS/FAIL/UNVERIFIED with date, target ref, app build and tester. None of these nine live requirements has been verified by this local-only task. Stop before production until the edit-timing DECISION BOX is resolved, 008/009 have had a production-level review, platform grants/007 deletion are proven, and this checklist is complete.

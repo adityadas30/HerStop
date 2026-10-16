@@ -10,6 +10,10 @@ lock table public.reviews in access exclusive mode;
 do $$
 declare t text; occupied boolean;
 begin
+  if to_regprocedure('public.is_caller_banned()') is not null or exists (
+    select 1 from information_schema.columns where table_schema='public'
+      and table_name='reviews' and column_name='edited_at'
+  ) then raise exception '003 rollback refuses installed 008/009; roll them back first'; end if;
   if current_setting('herstop.rollback_003_clients_ready', true) is distinct from 'on' then
     raise exception '003 rollback requires stopped-client attestation';
   end if;

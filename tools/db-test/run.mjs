@@ -37,13 +37,15 @@ async function check(name, fn) {
     throw error;
   }
 }
-async function guarded(version, fixture, flags, expectedMessage) {
+// flags: true = every attestation on, false = all off, or a queries.sql name.
+// path: run this SQL file instead of the version's down script.
+async function guarded(version, fixture, flags, expectedMessage, path) {
   const before = await snapshot();
-  await exec(flags ? 'rollback_flags' : 'clear_flags');
+  await exec(typeof flags === 'string' ? flags : flags ? 'rollback_flags' : 'clear_flags');
   await exec('begin');
   if (fixture) await exec(fixture);
   let error;
-  try { await down(version); } catch (caught) { error = caught; }
+  try { await (path ? file(path) : down(version)); } catch (caught) { error = caught; }
   await exec('rollback');
   assert.ok(error, 'rollback guard unexpectedly accepted');
   assert.equal(error.code, 'P0001');
@@ -73,6 +75,26 @@ function csvRoundTrip(rows) {
   return records.map(record => Object.fromEntries(header.map((c, i) => [c, JSON.parse(record[i])])));
 }
 
+// Each `-- CASE:` runs in its own rolled-back transaction on top of fixtures.sql.
+// phase 'with-008-009' skips [baseline-only] cases (they reproduce the old
+// vulnerabilities; their fixed counterparts live in proposed-tests.sql) and marks
+// fixture reviews as published-and-never-edited.
+async function runCases(path, { phase }) {
+  const post = phase === 'with-008-009';
+  for (const part of (await read(path)).split('-- CASE: ').slice(1)) {
+    const newline = part.indexOf('\n');
+    const name = part.slice(0, newline).trim();
+    if (post && name.startsWith('[baseline-only]')) continue;
+    await check(post ? `[with 008/009] ${name}` : name, async () => {
+      await exec('begin');
+      await file('tools/db-test/fixtures.sql');
+      if (post) await exec('fixture_published_edits');
+      await db.exec(part.slice(newline + 1));
+      await exec('rollback');
+    });
+  }
+}
+
 let failed = false;
 try {
   await check('Bootstrap real Postgres roles/auth/JWT helpers (simulated grants)', () => file('tools/db-test/bootstrap.sql'));
@@ -100,17 +122,7 @@ try {
       }
     });
   }
-  const cases = (await read('tools/db-test/isolation.sql')).split('-- CASE: ').slice(1);
-  for (const part of cases) {
-    const newline = part.indexOf('\n');
-    const name = part.slice(0, newline).trim();
-    await check(name, async () => {
-      await exec('begin');
-      await file('tools/db-test/fixtures.sql');
-      await db.exec(part.slice(newline + 1));
-      await exec('rollback');
-    });
-  }
+  await runCases('tools/db-test/isolation.sql', { phase: 'baseline' });
   await check('004 fails after 005 with NOT NULL; transaction restores catalog/data', async () => {
     const before = await query('export_stops');
     let error;
@@ -134,6 +146,7 @@ try {
   });
   await check('003 down refuses populated reviews/privacy downgrade', () => guarded('003', 'guard_review', true, 'review data/privacy'));
   await check('006 down rejects missing loss flag', () => guarded('006', null, false, 'explicit OSM'));
+  await check('006 down rejects missing staging-only attestation', () => guarded('006', null, 'all_flags_but_staging', 'staging-only attestation'));
   await check('006 down rejects saved-stop cascade even with flag', () => guarded('006', 'guard_save', true, 'dependent user data'));
   await check('006 down rejects review cascade even with flag', () => guarded('006', 'guard_review', true, 'dependent user data'));
   await check('006 down rejects reserved legacy ID overwrite', () => guarded('006', 'guard_reserved', true, 'changed/reserved'));
@@ -148,6 +161,10 @@ try {
     assert.equal((await query('counts'))[0].saves, 0); // Intentional non-recovery of cascaded rows.
     await down('006');
     assert.deepEqual(await query('seed_payload'), seedPayload);
+  });
+  await check('006 down requires both attestations even with zero OSM rows', async () => {
+    await guarded('006', null, false, 'explicit OSM');
+    await guarded('006', null, 'all_flags_but_staging', 'staging-only attestation');
   });
   await check('CSV backup restores TEST rename, timestamps and both legacy saves', async () => {
     await query('restore_stops', [JSON.stringify(backupStops)]);
@@ -174,19 +191,71 @@ try {
     await down('003');
     assert.deepEqual(await snapshot(), snapshots.get('003'));
   });
-  await check('Separate proposed 008/009 apply in local rehearsal only', async () => {
-    for (const version of ['003','005','006','007']) await file(ups[version]);
-    await file('docs/sprint-2/proposed-fixes/008_review_edit_delay.sql');
-    await file('docs/sprint-2/proposed-fixes/009_caller_moderation_and_grants.sql');
-  });
-  for (const part of (await read('tools/db-test/proposed-tests.sql')).split('-- CASE: ').slice(1)) {
-    const newline = part.indexOf('\n');
-    await check(part.slice(0,newline).trim(), async () => {
-      await exec('begin'); await file('tools/db-test/fixtures.sql');
-      await db.exec(part.slice(newline + 1)); await exec('rollback');
+  // ---- Second pass: re-apply 003-007, then the 008/009 final candidates. ----
+  const again = new Map();
+  for (const version of ['003', '005', '006', '007']) {
+    await check(`Re-apply ${version} after rollback; pre-apply catalog matches first pass`, async () => {
+      again.set(version, await snapshot());
+      assert.deepEqual(again.get(version), snapshots.get(version));
+      await file(ups[version]);
     });
   }
-} catch { failed = true; }
+  const fix = { '008': 'docs/sprint-2/proposed-fixes/008_review_edit_delay.sql',
+    '009': 'docs/sprint-2/proposed-fixes/009_caller_moderation_and_grants.sql' };
+  await check('Apply 008 final candidate', async () => {
+    again.set('008', await snapshot());
+    await file(fix['008']);
+  });
+  await check('009 refuses without inspected object-creator attestation', async () => {
+    await exec('clear_creator_flag');
+    await guarded('009', null, false, 'object-creator role', fix['009']);
+  });
+  await check('Apply 009 final candidate (in-file effective-privilege check passes)', async () => {
+    again.set('009', await snapshot());
+    await exec('creator_flag');
+    await file(fix['009']);
+  });
+  await runCases('tools/db-test/proposed-tests.sql', { phase: 'with-008-009' });
+  await runCases('tools/db-test/isolation.sql', { phase: 'with-008-009' });
+
+  // ---- Rollback 009 -> 008 -> 007 -> 006 -> 005 -> 003 from the fixed state. ----
+  await check('003 down refuses while 008/009 are installed', () => guarded('003', null, true, 'refuses installed 008/009'));
+  await check('008 down refuses while 009 is installed', () => guarded('008', null, true, 'requires 009_down first'));
+  await check('009 down rejects absent attestations', () => guarded('009', null, false, 'staging-only and stopped-client'));
+  await check('009 down rejects absent staging-only attestation', () => guarded('009', null, 'all_flags_but_staging', 'staging-only and stopped-client'));
+  await check('009 down refuses populated review table', () => guarded('009', 'guard_review', true, 'populated user/moderation'));
+  await check('009 down refuses populated saved_stops table', () => guarded('009', 'guard_save', true, 'populated user/moderation'));
+  await check('009 down restores pre-009 catalog incl. ACLs/default ACLs; idempotent', async () => {
+    await exec('rollback_flags'); await down('009');
+    assert.deepEqual(await snapshot(), again.get('009'));
+    await down('009');
+    assert.deepEqual(await snapshot(), again.get('009'));
+  });
+  await check('003 down refuses while 008 (edited_at) is installed', () => guarded('003', null, true, 'refuses installed 008/009'));
+  await check('008 down rejects absent attestations', () => guarded('008', null, false, 'staging-only and stopped-client'));
+  await check('008 down rejects absent staging-only attestation', () => guarded('008', null, 'all_flags_but_staging', 'staging-only and stopped-client'));
+  await check('008 down refuses review/edit data loss', () => guarded('008', 'guard_review', true, 'review/edit data loss'));
+  await check('008 down restores pre-008 catalog (no edited_at, no herstop_rollback); idempotent', async () => {
+    await exec('rollback_flags'); await down('008');
+    assert.deepEqual(await snapshot(), again.get('008'));
+    await down('008');
+    assert.deepEqual(await snapshot(), again.get('008'));
+  });
+  await check('Full chain 007 -> 006 -> 005 -> 003 after 008/009 rollback restores each catalog', async () => {
+    await exec('rollback_flags');
+    for (const version of ['007', '006', '005', '003']) {
+      await down(version);
+      assert.deepEqual(await snapshot(), again.get(version), `${version} down`);
+    }
+    assert.deepEqual(await snapshot(), snapshots.get('003'));
+  });
+} catch (error) {
+  failed = true;
+  // Errors outside check() (e.g. a snapshot query) must not vanish silently.
+  if (!results.length || results.at(-1).result !== 'FAIL') {
+    console.error(`Harness error outside a check: ${error.code ?? error.name}: ${error.message.split('\n')[0]}`);
+  }
+}
 finally { await db.close(); }
 console.table(results);
 console.log(`${results.filter(r => r.result === 'PASS').length}/${results.length} checks passed; ${failed ? 'FAIL' : 'PASS'}.`);

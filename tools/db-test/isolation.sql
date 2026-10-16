@@ -60,7 +60,7 @@ select test.ok((select review_publish_delay()=interval '24 hours'),'configured d
 select set_config('request.jwt.claims','{"sub":"20000000-0000-0000-0000-000000000001","role":"authenticated"}',true);
 set local role authenticated;
 select test.ok((select count(*)=2 from get_stop_reviews('osm-node-7759210731')),'author sees own new review');
--- CASE: B1 already-public edit becomes public immediately (KNOWN RISK)
+-- CASE: [baseline-only] B1 already-public edit becomes public immediately (KNOWN RISK)
 select set_config('request.jwt.claims','{"sub":"20000000-0000-0000-0000-000000000001","role":"authenticated"}',true);
 set local role authenticated;
 update reviews set note='Synthetic immediate public edit' where user_id=auth.uid();
@@ -82,8 +82,8 @@ select hide_review('20000000-0000-0000-0000-000000000002');
 select hide_review('20000000-0000-0000-0000-000000000002');
 select test.ok((select count(*)=1 from get_stop_reviews('osm-node-7759210731')),'personal hide affects B');
 select test.ok((select review_count=2 from get_stop_review_stats(array['osm-node-7759210731'])),'personal hide does not affect stats');
-select test.ok((select count(*)=0 from review_reports),'reports cannot be read directly');
-select test.ok((select count(*)=0 from hidden_reviews),'hides cannot be read directly');
+select test.ok(test.no_rows_visible('review_reports'),'reports cannot be read directly');
+select test.ok(test.no_rows_visible('hidden_reviews'),'hides cannot be read directly');
 reset role;
 select test.ok((select count(*)=1 from hidden_reviews),'hide idempotent');
 select test.ok((select count(*)=1 and min(review_note_snapshot)='Synthetic A' from review_reports),'report idempotent and snapshots note');
@@ -120,7 +120,7 @@ set local role authenticated;
 select test.denied($q$update reviews set note='banned edit'$q$);
 select test.denied($q$insert into reviews(user_id,stop_id,overall_feeling,lighting,restroom_quality,cleanliness,staff_kindness,loitering_concern,would_stop_again,time_of_visit) values (auth.uid(),'osm-node-9446063174',3,3,3,3,3,'low',true,'day')$q$);
 select test.ok((select count(*)=1 from get_stop_reviews('osm-node-7759210731')),'banned own review absent from RPC');
--- CASE: Arbitrary UUID ban oracle and banned caller moderation (KNOWN RISKS)
+-- CASE: [baseline-only] Arbitrary UUID ban oracle and banned caller moderation (KNOWN RISKS)
 insert into banned_users(user_id) values ('30000000-0000-0000-0000-000000000001');
 select set_config('request.jwt.claims','{"sub":"20000000-0000-0000-0000-000000000001","role":"authenticated"}',true);
 set local role authenticated;
@@ -134,12 +134,16 @@ select hide_review('20000000-0000-0000-0000-000000000002');
 reset role;
 select test.ok((select count(*)=1 from review_reports),'banned caller CAN report');
 select test.ok((select count(*)=1 from hidden_reviews),'banned caller CAN hide');
--- CASE: TRUNCATE bypasses RLS under simulated broad grants (KNOWN CONDITIONAL RISK)
+-- CASE: [baseline-only] TRUNCATE bypasses RLS under simulated broad grants (KNOWN CONDITIONAL RISK)
 insert into banned_users(user_id) values ('20000000-0000-0000-0000-000000000001');
 set local role anon;
 truncate table banned_users;
 reset role;
 select test.ok((select count(*)=0 from banned_users),'TRUNCATE is not subject to RLS');
+-- CASE: [baseline-only] Revoke-from-PUBLIC leaves explicit default EXECUTE grants (KNOWN CONDITIONAL RISK)
+select test.ok(has_function_privilege('anon','review_publish_delay()','execute'),'anon keeps review_publish_delay under broad default grants');
+select test.ok(has_function_privilege('authenticated','reviews_enforce_invariants()','execute'),'clients keep trigger-function execute');
+select test.ok(has_function_privilege('authenticated','is_banned(uuid)','execute'),'authenticated can call arbitrary-UUID is_banned');
 -- CASE: 007 privileges, caller deletion and all FK cascades
 select test.ok(has_function_privilege('authenticated','delete_my_account()','execute'),'authenticated grant');
 select test.ok(not has_function_privilege('anon','delete_my_account()','execute'),'anon revoked');

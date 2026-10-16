@@ -1,10 +1,19 @@
 // Founder-run, interactive, DISPOSABLE STAGING ACCOUNTS ONLY.
 // Reads process.env only; never opens .env, logs credentials, or uses an admin key.
 // Deletes both empty test accounts via 007, including on test failure.
+// REQUIRED mode flag, no default:
+//   HERSTOP_RLS_MODE=baseline-003   staging has 001-007 only; KNOWN RISK checks
+//                                   assert the old vulnerable behaviour is reproduced.
+//   HERSTOP_RLS_MODE=with-008-009   staging also has 008/009; the same checks
+//                                   assert the fixes (edits set edited_at, etc.).
+// The script stops if the mode does not match the deployed reviews schema.
 import assert from 'node:assert/strict';
 import { createInterface } from 'node:readline/promises';
 
 const env = process.env;
+const MODES = ['baseline-003', 'with-008-009'];
+const mode = env.HERSTOP_RLS_MODE;
+const fixed = mode === 'with-008-009';
 const results = [];
 const users = [];
 let cleanupAuthorized = false;
@@ -43,6 +52,11 @@ function denied(response) {
   // A duplicate/FK failure does NOT prove RLS. Missing objects also fail.
   assert.ok([401,403].includes(response.status) && response.data?.code === '42501', 'Expected RLS/privilege denial');
 }
+// A revoked EXECUTE grant shows up as 42501, or as PGRST202 if PostgREST hides it.
+function rpcGrantDenied(response) {
+  assert.ok(([401,403].includes(response.status) && response.data?.code==='42501') ||
+    (response.status===404 && response.data?.code==='PGRST202'),'Expected RPC grant denial');
+}
 function noMutation(response) {
   if ([401,403].includes(response.status)) denied(response);
   else assert.deepEqual(ok(response), []);
@@ -60,14 +74,21 @@ async function check(name, fn) {
   try { await fn(); results.push({ result: 'PASS', test: name }); }
   catch { results.push({ result: 'FAIL', test: name }); throw new Error(`Failed: ${name}`); }
 }
+// Forged server-owned fields; the invariant trigger must overwrite them.
+// edited_at only exists with 008, so it is only sent in that mode.
 const rowBody = (id, stop, label) => ({
   user_id: id, stop_id: stop, overall_feeling: 4, lighting: 4,
   restroom_quality: 4, cleanliness: 4, staff_kindness: 4,
   loitering_concern: 'low', would_stop_again: true, time_of_visit: 'day',
   note: `${marker} ${label}`, created_at: '2000-01-01T00:00:00Z', is_hidden: true,
+  ...(fixed ? { edited_at: '2000-01-01T00:00:00Z' } : {}),
 });
+const ageInstructions = fixed
+  ? 'set BOTH created_at AND edited_at to now() - 3 days'
+  : 'set created_at to now() - 3 days';
 let failed = false;
 try {
+  assert.ok(MODES.includes(mode), `Set HERSTOP_RLS_MODE to one of: ${MODES.join(', ')}`);
   const raw = requireValue('EXPO_PUBLIC_SUPABASE_URL');
   assert.ok(!raw.toLowerCase().includes('xnkjqcygzjlspeagcoal'), 'Production project refused');
   const url = new URL(raw);
@@ -111,6 +132,8 @@ try {
     user.review = ok(await rest(user,'reviews','','POST',rowBody(user.id,stop,user.label)))[0];
     assert.equal(user.review.is_hidden,false);
     assert.ok(new Date(user.review.created_at).getUTCFullYear()>2000,'Timestamp must be forced');
+    assert.equal('edited_at' in user.review, fixed, `HERSTOP_RLS_MODE=${mode} does not match the deployed reviews schema`);
+    if (fixed) assert.ok(new Date(user.review.edited_at).getUTCFullYear()>2000,'edited_at must be forced');
   }
   await check('A/B/anon cannot read, insert-as, update or delete another user rows', async () => {
     for (const actor of [a,b,anon]) {
@@ -130,6 +153,11 @@ try {
     for (const user of users) for (const table of ['profiles','saved_stops','reviews']) {
       assert.equal(ok(await rest(user,table,'?select=*')).length,1);
     }
+    if (fixed) {
+      // Another user's rejected PATCH must not mark A's review as edited.
+      const own = ok(await rest(a,'reviews',`?id=eq.${a.review.id}&select=edited_at`))[0];
+      assert.equal(own.edited_at,a.review.edited_at,'Cross-user PATCH changed edited_at');
+    }
   });
   await check('Own operations and immutable review identity/timestamp/moderation', async () => {
     ok(await rest(a,'profiles',`?id=eq.${a.id}`,'PATCH',{display_name:`${marker} A edited`}));
@@ -141,6 +169,14 @@ try {
       user_id:b.id,stop_id:otherStop,is_hidden:true,created_at:'2000-01-01T00:00:00Z',note:`${marker} A`,
     }))[0];
     for (const column of ['user_id','stop_id','is_hidden','created_at']) assert.equal(edited[column],a.review[column]);
+    if (fixed) {
+      // Same note, pinned fields only: a no-op is NOT an edit.
+      assert.equal(edited.edited_at,a.review.edited_at,'No-op PATCH must keep edited_at');
+      const rated = ok(await rest(a,'reviews',`?id=eq.${a.review.id}`,'PATCH',{lighting:3,edited_at:'2000-01-01T00:00:00Z'}))[0];
+      assert.ok(new Date(rated.edited_at)>new Date(a.review.edited_at),'Ratings-only edit must set edited_at (not forgeable)');
+      const noted = ok(await rest(a,'reviews',`?id=eq.${a.review.id}`,'PATCH',{note:`${marker} A note edit`}))[0];
+      assert.ok(new Date(noted.edited_at)>=new Date(rated.edited_at),'Note-only edit must set edited_at');
+    }
     const temp = ok(await rest(a,'reviews','','POST',rowBody(a.id,otherStop,'temporary')))[0];
     assert.equal(ok(await rest(a,'reviews',`?id=eq.${temp.id}`,'DELETE')).length,1);
   });
@@ -148,20 +184,21 @@ try {
     for (const actor of [anon,b]) assert.ok(!ok(await readReviews(actor)).some(row=>row.id===a.review.id));
     assert.ok(ok(await readReviews(a)).some(row=>row.id===a.review.id));
     for (const row of ok(await readReviews(a))) assert.ok(!('user_id' in row) && !('created_at' in row));
-    for (const [name,args] of [['report_review',{p_review_id:a.review.id,p_reason:'spam'}],['hide_review',{p_review_id:a.review.id}],['is_banned',{p_user_id:a.id}],['delete_my_account',{}]]) {
-      const response=await rpc(anon,name,args);
-      assert.ok(([401,403].includes(response.status) && response.data?.code==='42501') || (response.status===404 && response.data?.code==='PGRST202'),'Expected RPC grant denial');
+    const anonDenied = [['report_review',{p_review_id:a.review.id,p_reason:'spam'}],['hide_review',{p_review_id:a.review.id}],['is_banned',{p_user_id:a.id}],['delete_my_account',{}]];
+    if (fixed) anonDenied.push(['is_caller_banned',{}],['review_publish_delay',{}]);
+    for (const [name,args] of anonDenied) {
+      rpcGrantDenied(await rpc(anon,name,args));
     }
     for (const name of ['report_review','hide_review']) {
       const response=await rpc(b,name,{p_review_id:a.review.id,...(name==='report_review'?{p_reason:'spam'}:{})});
       assert.equal(response.data?.code,'P0001');
     }
   });
-  await checkpoint('AGE: age both fixture reviews by three days in staging SQL Editor');
-  await check('Published projection, B1 immediate edits and viewer-scoped hide/report', async () => {
+  await checkpoint(`AGE: for both fixture reviews ${ageInstructions} in staging SQL Editor`);
+  await check('Published projection and viewer-scoped hide/report', async () => {
     assert.ok(ok(await readReviews(anon)).some(row=>row.id===a.review.id));
-    ok(await rest(a,'reviews',`?id=eq.${a.review.id}`,'PATCH',{note:`${marker} A edited-public`}));
-    assert.ok(ok(await readReviews(anon)).some(row=>row.id===a.review.id && row.note.endsWith('edited-public')),'B1 baseline reproduction (will fail once fixed)');
+    const stats=ok(await rpc(anon,'get_stop_review_stats',{p_stop_ids:[stop]}));
+    assert.ok(stats[0].review_count>=2);
     for (let i=0;i<2;i++) {
       ok(await rpc(b,'report_review',{p_review_id:a.review.id,p_reason:'spam'}));
       ok(await rpc(b,'hide_review',{p_review_id:a.review.id}));
@@ -172,9 +209,24 @@ try {
     ok(await rpc(a,'hide_review',{p_review_id:b.review.id}));
     assert.ok(!ok(await readReviews(b)).some(row=>row.id===a.review.id));
     assert.ok(ok(await readReviews(a)).some(row=>row.id===a.review.id));
-    const stats=ok(await rpc(anon,'get_stop_review_stats',{p_stop_ids:[stop]}));
-    assert.ok(stats[0].review_count>=2);
   });
+  if (fixed) {
+    await check('008 edit of a published review: hidden from others until next daily batch (KNOWN RISK reproduced)', async () => {
+      ok(await rest(a,'reviews',`?id=eq.${a.review.id}`,'PATCH',{note:`${marker} A edited-public`}));
+      // KNOWN RISK accepted for staging: the OLD published version vanishes immediately too.
+      assert.ok(!ok(await readReviews(anon)).some(row=>row.id===a.review.id),'Edited review must not be public yet');
+      assert.ok(ok(await readReviews(a)).some(row=>row.id===a.review.id && row.note.endsWith('edited-public')),'Author must still see own edit');
+    });
+    await checkpoint('AGE EDIT: set A fixture review edited_at to now() - 3 days in staging SQL Editor');
+    await check('008 edited text republishes after ageing', async () => {
+      assert.ok(ok(await readReviews(anon)).some(row=>row.id===a.review.id && row.note.endsWith('edited-public')));
+    });
+  } else {
+    await check('B1 already-public edit is public immediately (KNOWN RISK reproduced; baseline only)', async () => {
+      ok(await rest(a,'reviews',`?id=eq.${a.review.id}`,'PATCH',{note:`${marker} A edited-public`}));
+      assert.ok(ok(await readReviews(anon)).some(row=>row.id===a.review.id && row.note.endsWith('edited-public')));
+    });
+  }
   await checkpoint('HIDE: globally hide A fixture review; verify report snapshot and one per-viewer hide');
   await check('Hidden review cannot be unhidden/deleted by author; hidden from anon', async () => {
     const edited=ok(await rest(a,'reviews',`?id=eq.${a.review.id}`,'PATCH',{is_hidden:false}))[0];
@@ -185,16 +237,30 @@ try {
     for (const name of ['report_review','hide_review']) assert.equal((await rpc(b,name,{p_review_id:a.review.id,...(name==='report_review'?{p_reason:'spam'}:{})})).data?.code,'P0001');
   });
   await checkpoint('BAN: unhide A fixture review and ban B test account');
-  await check('Ban oracle, banned writes/read suppression and banned-caller RPC gap', async () => {
-    assert.equal(ok(await rpc(a,'is_banned',{p_user_id:b.id})),true,'Arbitrary UUID ban oracle reproduced');
+  await check(fixed ? 'Ban oracle closed, banned writes/read suppression, banned caller cannot moderate'
+    : 'Ban oracle, banned writes/read suppression and banned-caller RPC gap (KNOWN RISKS reproduced)', async () => {
+    if (fixed) {
+      rpcGrantDenied(await rpc(a,'is_banned',{p_user_id:b.id}));
+      assert.equal(ok(await rpc(b,'is_caller_banned')),true);
+      assert.equal(ok(await rpc(a,'is_caller_banned')),false);
+    } else {
+      assert.equal(ok(await rpc(a,'is_banned',{p_user_id:b.id})),true,'Arbitrary UUID ban oracle reproduced');
+    }
     denied(await rest(b,'reviews',`?id=eq.${b.review.id}`,'PATCH',{note:'Forbidden banned edit'}));
     denied(await rest(b,'reviews','','POST',rowBody(b.id,otherStop,'forbidden')));
     assert.ok(!ok(await readReviews(b)).some(row=>row.id===b.review.id));
     assert.ok(!ok(await readReviews(anon)).some(row=>row.id===b.review.id));
     for (const name of ['report_review','hide_review']) assert.equal((await rpc(a,name,{p_review_id:b.review.id,...(name==='report_review'?{p_reason:'spam'}:{})})).data?.code,'P0001');
-    // Existing idempotent report/hide still succeeds for banned B under original 003.
-    ok(await rpc(b,'report_review',{p_review_id:a.review.id,p_reason:'spam'}));
-    ok(await rpc(b,'hide_review',{p_review_id:a.review.id}));
+    if (fixed) {
+      // 009: banned callers are refused before any visibility check.
+      for (const name of ['report_review','hide_review']) {
+        denied(await rpc(b,name,{p_review_id:a.review.id,...(name==='report_review'?{p_reason:'spam'}:{})}));
+      }
+    } else {
+      // Existing idempotent report/hide still succeeds for banned B under original 003.
+      ok(await rpc(b,'report_review',{p_review_id:a.review.id,p_reason:'spam'}));
+      ok(await rpc(b,'hide_review',{p_review_id:a.review.id}));
+    }
   });
   await check('Actual 007 call deletes A, preserves B, and invalidates A password sign-in', async () => {
     ok(await rpc(a,'delete_my_account')); a.deleted=true;
