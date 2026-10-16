@@ -10,7 +10,34 @@ The independent security re-review verdict is **APPROVE WITH FIXES: 008/009 are 
 PATH=/Users/adityadas/.nvm/versions/node/v24.14.1/bin:$PATH node tools/db-test/run.mjs
 ```
 
-Local result (2026-10-16): **77/77 checks passed**. The run covers the baseline 001–007 suite; 008/009 applied on top; every non-baseline isolation case re-run with 008/009 installed; and the 008/009 rollback guards plus a full 009 → 008 → 007 → 006 → 005 → 003 catalog-restoring chain. The suite was mutation-checked: 9 deliberate defects (policy without `to authenticated`, no-op upsert counted as an edit, missing TRUNCATE revoke, missing default-ACL revoke, missing caller-ban check, 008 visibility change removed, 003_down guard removed, 006_down staging attestation removed, 009_down ACL replay removed) were each caught by the intended test. Known-risk tests PASS when they reproduce the documented vulnerability. Exact migrations run in in-process PGlite, with synthetic identities, simulated grants, catalog rollback comparisons and CSV backup round trip. No extension substitution was needed. See [tooling README](../../tools/db-test/README.md) for limits. No `.env` file was read; only PGlite installation used network. Mobile package/lockfiles and original migrations are unchanged.
+Local result (2026-10-16): **82/82 checks passed**. The run covers:
+- the baseline 001–007 suite;
+- 008/009 applied on top, with five 009 refusal tests (see below);
+- every non-baseline isolation case re-run with 008/009 installed;
+- the 008/009 rollback guards plus a full 009 → 008 → 007 → 006 → 005 → 003 catalog-restoring chain.
+
+**Mutation check (exactly what was run, 2026-10-16, against this 82-check suite).** Each mutation was applied to a scratch copy under `/tmp`, which was then deleted. The real files were not changed. Each one made the harness exit 1 at the named test. The runner stops at the first failure, so some runs also removed earlier test entries from the scratch `run.mjs` to show that a later test fails on its own.
+
+| # | Mutation (scratch copy only) | First failing test |
+|---|---|---|
+| N1 | 009: delete the whole end-of-migration effective-privilege check | (a) other-role TRUNCATE grant |
+| N1′ | same, with test (a) removed | (b) other-role EXECUTE grant on is_banned |
+| N1″ | same, with tests (a) and (b) removed | (c) TRUNCATE inherited via role membership |
+| N2 | 009: remove only the table-privilege raise | (a); with (a) removed, (b) **passes** and (c) fails |
+| N3 | 009: remove only the function-execute raise | (b); (a) passes |
+| N4 | 009: remove the single-owner refusal | public table owned by another role |
+| N5 | 009: remove the 008-metadata refusal | 008 rollback metadata missing |
+| O1 | 009: insert policy without `to authenticated` | review write policies apply to authenticated only |
+| O2 | 008: every client update sets edited_at | no-op upsert/update are NOT edits |
+| O3 | 009: drop the TRUNCATE revoke | Apply 009 (its own privilege check aborts) |
+| O4 | 009: drop the in-schema function EXECUTE default revoke | default ACLs: later objects get no client truncate/execute |
+| O5 | 009: report_review skips the caller-ban check | closes UUID oracle and banned-caller RPCs |
+| O6 | 008: leave the read cutoff on created_at | KNOWN RISK: edit vanishes immediately |
+| O7 | 003_down: remove the 008/009-installed refusal | 003 down refuses while 008/009 are installed |
+| O8 | 006_down: remove the staging-only attestation | 006 down rejects missing staging-only attestation |
+| O9 | 009_down: skip the grant/default-ACL replay | 009 down restores pre-009 catalog |
+
+Not mutation-checked: every other line of 008/009/rollback SQL, and the harness's own helpers. One driver mistake was found and corrected: the first N4 attempt produced broken SQL and was discarded, not counted. Known-risk tests PASS when they reproduce the documented vulnerability. Exact migrations run in in-process PGlite, with synthetic identities, simulated grants, catalog rollback comparisons and CSV backup round trip. No extension substitution was needed. See [tooling README](../../tools/db-test/README.md) for limits. No `.env` file was read; only PGlite installation used network. Mobile package/lockfiles and original migrations are unchanged.
 
 Founder prerequisites: separate project, dashboard access, two **new disposable** accounts with no existing app data, a secure local backup folder, and a quiet maintenance window. Pause app clients, test automation and ingestion during apply/rollback/restore. Do not copy real users' data into staging just to match production counts. Enable Email + Password for the test accounts and disable confirm-email **only in staging**, or explicitly pre-confirm those disposable users. These settings are for password tests; separately configure OTP templates with `{{ .Token }}` in both signup and magic-link templates. Password-test settings do not prove OTP works. Record the security advisor's leaked-password protection setting; the supplied live report says it is disabled. Do not assume staging inherits anything.
 
@@ -160,6 +187,17 @@ set herstop.object_creator_role = '<current_user from 4a>';
 ```
 
 009 refuses if the attestation doesn't match `current_user`, if any public table/function has another owner, or if 008's metadata is missing. It ends with an **effective-privilege check**. If any client can still TRUNCATE/REFERENCES/TRIGGER a public table, or EXECUTE a function outside the allowlist, it aborts the whole transaction. Allowlist: anon → `get_stop_reviews`, `get_stop_review_stats`. authenticated → those two plus `is_caller_banned`, `report_review`, `hide_review`, `delete_my_account`. An abort means a grant came from another role: ROLLBACK, inventory, stop.
+
+Locally tested refusals: the attestation is missing; another role granted TRUNCATE on reviews to anon; another role granted EXECUTE on is_banned to authenticated; anon inherits TRUNCATE through a role membership; a public table is owned by another role; 008 metadata is missing. Each test asserts the transaction rolled back with the catalog unchanged.
+
+**Known limits of the 009 self-check.** The final check only looks at public **tables** (`relkind` r/p) and public **functions**, and only for the roles **anon** and **authenticated**. It does **not** see:
+- sequences, views or materialized views;
+- schema-level CREATE/USAGE privileges;
+- any schema other than `public`, including `herstop_rollback` (008 revokes client access there, but the check doesn't re-verify it);
+- roles other than anon/authenticated;
+- grants made **later**, including by other owner roles such as `supabase_admin`. It only runs once, at apply time.
+
+That is why the §4a grant inventory must be re-run after 009 (step 4 below) and after any later platform or dashboard change. Add `information_schema.role_usage_grants` / `has_schema_privilege` checks for schemas and `has_sequence_privilege` for sequences if any exist.
 
 After 008 **and again after 009**:
 

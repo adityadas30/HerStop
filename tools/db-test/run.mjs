@@ -210,6 +210,18 @@ try {
     await exec('clear_creator_flag');
     await guarded('009', null, false, 'object-creator role', fix['009']);
   });
+  // Each fixture plants one condition 009 must refuse; guarded() asserts P0001,
+  // the message, and an unchanged catalog after rollback.
+  await exec('creator_flag');
+  for (const [name, fixture, message] of [
+    ['009 privilege check fires: another role granted TRUNCATE on reviews to anon', 'g009_other_grantor_truncate', '009 privilege check'],
+    ['009 privilege check fires: another role granted EXECUTE on is_banned to authenticated', 'g009_other_grantor_execute', '009 privilege check'],
+    ['009 privilege check fires: anon inherits TRUNCATE via role membership', 'g009_inherited_truncate', '009 privilege check'],
+    ['009 refuses a public table owned by another role', 'g009_foreign_owner', 'single inspected public object creator'],
+    ['009 refuses when 008 rollback metadata is missing', 'g009_missing_008_metadata', '008 rollback metadata'],
+  ]) {
+    await check(name, () => guarded('009', fixture, false, message, fix['009']));
+  }
   await check('Apply 009 final candidate (in-file effective-privilege check passes)', async () => {
     again.set('009', await snapshot());
     await exec('creator_flag');

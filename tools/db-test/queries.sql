@@ -66,6 +66,33 @@ select set_config('herstop.rollback_003_clients_ready','on',false),
 select set_config('herstop.object_creator_role',current_user,false);
 -- QUERY: clear_creator_flag
 select set_config('herstop.object_creator_role','',false);
+-- QUERY: g009_other_grantor_truncate
+-- Another role (not the owner) grants TRUNCATE to anon. 009's REVOKE, issued by
+-- the owner, cannot remove a grant whose grantor is someone else.
+create role zz_other_grantor nologin;
+grant usage on schema public to zz_other_grantor;
+grant truncate on public.reviews to zz_other_grantor with grant option;
+set local role zz_other_grantor;
+grant truncate on public.reviews to anon;
+reset role;
+-- QUERY: g009_other_grantor_execute
+create role zz_other_grantor nologin;
+grant usage on schema public to zz_other_grantor;
+grant execute on function public.is_banned(uuid) to zz_other_grantor with grant option;
+set local role zz_other_grantor;
+grant execute on function public.is_banned(uuid) to authenticated;
+reset role;
+-- QUERY: g009_inherited_truncate
+-- anon inherits TRUNCATE through membership; 009 revokes only from PUBLIC/anon/authenticated.
+create role zz_truncater nologin;
+grant truncate on public.reviews to zz_truncater;
+grant zz_truncater to anon;
+-- QUERY: g009_foreign_owner
+create role zz_other_owner nologin;
+create table public.zz_foreign_owned(id int);
+alter table public.zz_foreign_owned owner to zz_other_owner;
+-- QUERY: g009_missing_008_metadata
+delete from herstop_rollback.state where version='008';
 -- QUERY: fixture_published_edits
 -- After 008 the fixture rows get edited_at=now() from the column default; as the
 -- owner (trigger does not fire for owner) make them "published, never edited".
